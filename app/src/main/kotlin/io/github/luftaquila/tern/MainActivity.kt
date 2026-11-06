@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.luftaquila.tern.session.SessionService
 import io.github.luftaquila.tern.ui.LocalContainer
 import io.github.luftaquila.tern.ui.LocalNavigator
 import io.github.luftaquila.tern.ui.LocalRequestNotificationPermission
@@ -34,7 +35,11 @@ import io.github.luftaquila.tern.ui.theme.isDarkTheme
 class MainActivity : ComponentActivity() {
     private var askedNotifications = false
     private val notificationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            // The first session starts while this dialog is up. Its notification was posted without
+            // the permission and stays hidden until it is posted again.
+            if (granted) SessionService.repostNotification(this)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge(

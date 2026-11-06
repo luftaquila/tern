@@ -28,6 +28,7 @@
 - Agent forwarding: one `AgentChannelOpener` per connection from `openShell(..., agent)`; each private key loaded on its first sign request (`loadPrivateKey`)
 - Post-quantum key exchange in `ssh/PostQuantumKex.kt` on sshj's `KeyExchangeBase`; shared secret as `RawSecret`
 - Terminal sessions and SFTP connected only through `session/HostConnector` (jump chain, stored credentials, remembered passwords per hop, agent keys)
+- `SessionService`: special-use foreground service while any session is open
 - Secret fields of the JSON stores encrypted with `SecretBox`
 - Persisted identifiers fixed: Keystore alias `tern.secret.v1` (a new alias only with `SecretBox.migrateEarlierKeys`), color scheme ids
 - No mosh support

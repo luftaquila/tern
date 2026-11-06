@@ -60,8 +60,13 @@ class SessionService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_DISCONNECT_ALL) {
-            (application as TernApp).container.sessions.closeAll()
+        val manager = (application as TernApp).container.sessions
+        when (intent?.action) {
+            ACTION_DISCONNECT_ALL -> manager.closeAll()
+            ACTION_REPOST -> {
+                val count = manager.sessions.value.size
+                if (count > 0) getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification(count))
+            }
         }
         return START_NOT_STICKY
     }
@@ -98,9 +103,21 @@ class SessionService : Service() {
         private const val CHANNEL_ID = "sessions"
         private const val NOTIFICATION_ID = 1
         private const val ACTION_DISCONNECT_ALL = "io.github.luftaquila.tern.DISCONNECT_ALL"
+        private const val ACTION_REPOST = "io.github.luftaquila.tern.REPOST_NOTIFICATION"
 
         fun start(context: Context) {
             ContextCompat.startForegroundService(context, Intent(context, SessionService::class.java))
+        }
+
+        /**
+         * Posts the notification again when sessions are open. A foreground service notification
+         * posted before the notification permission was granted stays hidden until then.
+         * Call from the foreground only (it uses startService).
+         */
+        fun repostNotification(context: Context) {
+            val sessions = (context.applicationContext as TernApp).container.sessions.sessions.value
+            if (sessions.isEmpty()) return
+            context.startService(Intent(context, SessionService::class.java).setAction(ACTION_REPOST))
         }
     }
 }
