@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="window_background">#FFF7F8FA</color>
+    <!-- Launcher icon background, also behind the mark on the lock screen. -->
+    <color name="ic_launcher_background">#FF16181D</color>
+</resources>

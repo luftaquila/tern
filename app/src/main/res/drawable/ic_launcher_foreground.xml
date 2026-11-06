@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A shell prompt ">" and a hollow block cursor. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:pathData="M31.10,42.00 L43.10,54.00 L31.10,66.00"
+        android:strokeColor="#FFF2EEE6"
+        android:strokeWidth="6.5"
+        android:strokeLineCap="butt"
+        android:strokeLineJoin="miter" />
+    <path
+        android:pathData="M57.45,44.75 h18.50 v18.50 h-18.50 z"
+        android:strokeColor="#FFF26B3A"
+        android:strokeWidth="6.5"
+        android:strokeLineJoin="miter" />
+</vector>
