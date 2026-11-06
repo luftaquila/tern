@@ -1,0 +1,112 @@
+# AGENTS.md
+
+- Android SSH and SFTP terminal with IME composition input: a JVM terminal emulator, an SSH layer on sshj and a Compose app
+- Locations: emulator `terminal`, SSH and SFTP `ssh`, app `app` (IME `input`, terminal view `termview`, sessions `session`, stores `data`, billing `billing`, app lock `ui/lock`, extra keys `ui/terminal/ExtraKeysBar.kt`), table generators `terminal/tools/gen_wcwidth.py` and `app/tools/gen_nerd_font_coverage.py`
+
+## AGENTS.md writing rules
+- Terse bullets, noun phrases, no ambiguous wording
+- Readable by an agent without memory from this file and the repo alone
+  - No coined terms; each item clear on its own. Things in code named by their identifiers
+- Behavior and formats readable directly from code left out. Core system structure kept
+- No rationale, measurements, history, dates or commit hashes. A changed decision rewrites its item; the old one is not kept
+- Numbers only when the value itself is the decision. Code constants named by identifier
+- Rejected alternatives only as prohibitions, when needed to stop them being proposed again
+- One decision per item. Sub-items only for conditions, exceptions and examples; examples from the repo
+- New items in their section. No duplication across sections or with `README.md`
+- Content matches current code. On a conflict, ask the user which side is right before changing either
+- No environment-specific content (local paths, personal toolchain locations)
+- No references to private or temporary documents
+
+## System structure
+- `terminal`: pure JVM, not thread-safe; every access (feed, resize, rendering reads) under the session `lock`
+- `ssh`: pure JVM sshj wrapper; everything except `SshConnection.connect` blocking
+  - `SshSecurity.install()` before any sshj use
+- Key files read by `KeyFiles.load`, written by `OpenSshKeyWriter` for key generation and `SshKeys.exportOpenSsh`
+- Forwards from `SshConnection.forwardLocal/forwardRemote/forwardDynamic`, closed with their connection
+  - Device-side listeners on 127.0.0.1 only
+- Jump hosts: `connect(..., via = jump)` through `jump`'s direct-tcpip channel; the jump connection closed with the target, or at once when connecting fails
+- Agent forwarding: one `AgentChannelOpener` per connection from `openShell(..., agent)`; each private key loaded on its first sign request (`loadPrivateKey`)
+- Post-quantum key exchange in `ssh/PostQuantumKex.kt` on sshj's `KeyExchangeBase`; shared secret as `RawSecret`
+- Terminal sessions and SFTP connected only through `session/HostConnector` (jump chain, stored credentials, remembered passwords per hop, agent keys)
+- Secret fields of the JSON stores encrypted with `SecretBox`
+- Persisted identifiers fixed: Keystore alias `tern.secret.v1` (a new alias only with `SecretBox.migrateEarlierKeys`), color scheme ids
+- No mosh support
+
+## IME invariants
+- inputType `TYPE_CLASS_TEXT|NO_SUGGESTIONS|MULTI_LINE`; no `VISIBLE_PASSWORD`, no `TYPE_NULL`, no direct-keys mode
+- Committed text never deleted behind the IME; every editable change reported with `imm.updateSelection`
+- `ImeTextProcessor`: editable diffed against the remote-line mirror; composing non-ASCII text preedit only, an ASCII prefix sent at once
+- Preedit drawn like terminal text, without underline or highlight
+- Line-changing input (Enter, arrows, Tab, Ctrl/Alt, paste, mouse) only through `TerminalView.lineChangingInput`
+  - Composition committed first, editable reset after; `restartInput` when a composition was active
+- Soft composition: the last Hangul char rewritten by Gboard's `replaceText` treated as composing by `TerminalInputConnection`, never reported to the IME
+  - Counts as composing for `restartInput`
+- Each IME edit method in its own batch
+- Pending composition sent without sticky modifiers (`TerminalView.commitComposition`); arming CTRL/ALT commits the composition first
+- Predicted echo (`TerminalView.pendingEcho`) kept until the cursor advances by exactly its width; dropped on any other cursor movement or timeout
+- `IME_FLAG_NO_PERSONALIZED_LEARNING` only with `AppSettings.imeIncognito`
+- IME call tracing (`TernIme`) in debug builds only; typed text never logged in release builds
+- Gboard Korean ignoring the first backspace after a space commit: keyboard behavior, not a bug
+
+## Rendering
+- `TerminalView` paints: primary, fallback (`AppSettings.fallbackFont`, `SYSTEM_MONO` for system fonts only), symbol (Noto Sans Symbols 2), icon (Symbols Nerd Font for code points in `NerdFontCoverage`)
+- Glyph coverage of a paint's own font through `hasOwnGlyph`, not `Paint.hasGlyph`
+- Inline images as negative `ImageCell` values per covered cell; text extraction skips them (`ImageCell.isImage`)
+- Image rows drawn across the image's full width while any of the row's cells remains (`TerminalView.drawImages`)
+- PTY pixel size: columns × cell width by rows × cell height, no padding; cell size queries unanswered while unknown
+- `TerminalView.onDraw` clipped to its bounds; no `canvas.drawColor`
+- Box drawing, block elements and Powerline glyphs from `BoxDrawing.kt`, not the font
+- Cells with combining marks NFC-normalized before drawing
+- Bundled fonts unmodified, each with its license in `app/src/main/assets/licenses` and the licenses screen
+- `NerdFontCoverage.kt` regenerated with the icon font
+
+## Extra keys
+- Bar and editor preview from the same `ExtraKeysBarLayout`, `KeyRow` and `KeyCap`, sized by `KeyMetrics`
+- Bar keys on raw pointer input, never `clickable`; keys fire on release
+- Editor taps and drags in one gesture detector on the preview, not per key
+- Text keys without control characters through `sendTypedText`; macros through `sendRaw`
+
+## Pro and billing
+- `Products.UNLOCK_PRO` purchases acknowledged and kept; `REPEAT` products and `donate_small` consumed
+- An owned donation bought again as its `REPEAT` product (`Products.donationToBuy`)
+- Pro: debug builds or an owned `UNLOCK_PRO` product, cached in `AppSettings.proUnlocked`, cleared when Play stops reporting it
+- Pro settings kept without Pro but not applied; the session says so
+- `container.lock.beforeExternalPicker()` before the Play purchase sheet and file pickers
+
+## App lock
+- Lock pad in its own full-screen window (`LockWindow`) above sheets and dialogs; `PromptDialog` shows nothing while locked
+- PIN and pattern verifiers from `data/LockSecrets`, stored `SecretBox`-encrypted in `AppSettings.lockSecret`
+- Biometrics only in addition to a PIN or pattern (`AppLock.setBiometric`)
+- `ConfirmLock` before sensitive actions (private key export), sharing the lock screen's lockout (`AppLock.confirm`)
+
+## Settings
+- `AppSettings` stored with defaults encoded; a default changed for existing users needs an `AppSettings.SETTINGS_VERSION` bump and a conversion in `AppSettings.migrated()`
+- Removed enum values loaded as the field's default (`coerceInputValues` in `JsonStore.JSON`); such fields need a sensible default
+
+## UI
+- en and ko string resources with the same keys, except `app_name`
+- App name only from `R.string.app_name`, kept out of sentences
+- No Hangul special cases (font groups, samples)
+- No middle dot, em/en dashes or arrow chains as separators
+- Descriptions as short complete sentences (Korean 합니다체); in settings rows a period only with two sentences
+- Font size and scroll speed sliders with the same step count
+
+## License
+- GPL-3.0-only (`LICENSE`) with section 7 terms in `NOTICE`
+- No permission for others to link the Google Play Billing Library; contributors grant it only to luftaquila (`CONTRIBUTING.md`)
+- Copyright and SPDX header in every `.kt`, `.kts` and `.py` file, also written by the generators
+- `app/src/main/assets/licenses/Tern.txt`: `NOTICE` followed by `LICENSE`, regenerated when either changes
+
+## Working rules
+- Behavior changes update this file; `README.md` only for the pitch
+- `docs/privacy.md` and the store listing match the app; no claims for untested keyboards, devices or flows
+- AGP built-in Kotlin; no `org.jetbrains.kotlin.android` plugin
+- Release signing from the `ternUpload*` Gradle properties, outside the repo
+- Tags and releases only on user request
+
+## Verification
+- `./gradlew test`; `./gradlew :app:assembleRelease` for R8
+- Tests on behavior seen outside the code: screen contents, bytes a program or the server receives, the remote line after IME input, settings after migration
+  - No tests pinning internals or timing
+- Passing JVM tests do not verify keyboard behavior; IME changes checked on a device with Gboard
+- UI text checked on a device for a lone word wrapped onto a second line
