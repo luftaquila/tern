@@ -1,0 +1,45 @@
+Tern
+Copyright (C) 2026 luftaquila <dev@luftaquila.io>
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License, version 3 only, as published by
+the Free Software Foundation, together with the additional terms below. Later
+versions of the GNU General Public License do not apply.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+this program (the file LICENSE); if not, see <https://www.gnu.org/licenses>.
+
+
+Additional terms under GNU GPL version 3 section 7
+
+These terms apply to all material in this program whose copyright holder is
+luftaquila. Third-party material keeps its own license (see below).
+
+1. Author attribution (section 7(b)). Works based on this program must keep
+   this notice, and must preserve in the Appropriate Legal Notices they
+   display (in the app: its open source licenses screen) the attribution
+   "Based on Tern by luftaquila (https://github.com/luftaquila/tern)".
+
+2. Marking modified versions (section 7(c)). Modified versions must not
+   misrepresent their origin and must be marked in reasonable ways as
+   different from the original version: they must use a name other than
+   "Tern", an application ID other than io.github.luftaquila.tern and a
+   launcher icon other than the Tern icon, and must not state or suggest that
+   they are Tern or that they come from its author.
+
+3. Trademarks (section 7(e)). This license grants no rights under trademark
+   law to the name "Tern" or to the Tern icon (the launcher icon drawables in
+   app/src/main/res/drawable). They may be used only to refer to this
+   program.
+
+
+Third-party material
+
+Bundled fonts, the Gradle wrapper and the libraries the app uses keep their
+own licenses. The texts of the open source licenses among them are in
+app/src/main/assets/licenses (also shown in the app's open source licenses
+screen).
