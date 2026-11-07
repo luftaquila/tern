@@ -71,6 +71,10 @@
 - Editor taps and drags in one gesture detector on the preview, not per key
 - Text keys without control characters through `sendTypedText`; macros through `sendRaw`
 
+## Hosts
+- One group per host (`Host.group`), groups differing only in case shown as one
+- Tag field splitting comma-separated tags only when they are added, never while typing
+
 ## Billing
 - Donations only (`Products.DONATIONS`), each consumed once paid
 - No feature behind a purchase

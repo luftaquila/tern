@@ -70,6 +70,8 @@ import io.github.luftaquila.tern.R
 import io.github.luftaquila.tern.data.AuthMethod
 import io.github.luftaquila.tern.data.Host
 import io.github.luftaquila.tern.data.SecretBox
+import io.github.luftaquila.tern.data.groupNames
+import io.github.luftaquila.tern.data.tagNames
 import io.github.luftaquila.tern.session.HostConnector
 import io.github.luftaquila.tern.ui.LocalContainer
 import io.github.luftaquila.tern.ui.LocalNavigator
@@ -95,6 +97,9 @@ fun HostEditScreen(hostId: String?) {
     var showPassword by remember { mutableStateOf(false) }
     var keyId by rememberSaveable { mutableStateOf(original?.keyId) }
     var colorIndex by rememberSaveable { mutableIntStateOf(original?.colorIndex ?: (0 until HostColors.size).random()) }
+    var group by rememberSaveable { mutableStateOf(original?.group ?: "") }
+    var tags by rememberSaveable(stateSaver = TagsSaver) { mutableStateOf(original?.tags ?: emptyList()) }
+    var tagInput by rememberSaveable { mutableStateOf("") }
     var lang by rememberSaveable { mutableStateOf(original?.lang ?: Host.DEFAULT_LANG) }
     var startup by rememberSaveable { mutableStateOf(original?.startupCommand ?: "") }
     var termType by rememberSaveable { mutableStateOf(original?.termType ?: Host.DEFAULT_TERM) }
@@ -110,6 +115,9 @@ fun HostEditScreen(hostId: String?) {
             candidate.id != original?.id && HostConnector.jumpHosts(container.hosts, candidate).none { it.id == original?.id }
         }
     }
+
+    val knownGroups = remember(hosts) { hosts.groupNames() }
+    val knownTags = remember(hosts) { hosts.tagNames() }
 
     val portValue = port.toIntOrNull()
     val hostError = hostname.isBlank()
@@ -136,6 +144,10 @@ fun HostEditScreen(hostId: String?) {
             encryptedPassword = encrypted,
             keyId = if (authMethod == AuthMethod.KEY) keyId else original?.keyId,
             colorIndex = colorIndex,
+            // An existing group spelled with other capitals is the same group.
+            group = Host.groupOf(group).let { g -> knownGroups.firstOrNull { it.equals(g, ignoreCase = true) } ?: g },
+            // A tag still in the field counts too.
+            tags = withTags(tags, tagInput, knownTags),
             lang = lang.trim(),
             startupCommand = startup,
             termType = termType.trim().ifEmpty { Host.DEFAULT_TERM },
@@ -298,6 +310,17 @@ fun HostEditScreen(hostId: String?) {
                     }
                 }
             }
+
+            GroupSection(
+                group = group,
+                onGroupChange = { group = it },
+                tags = tags,
+                onTagsChange = { tags = it },
+                tagInput = tagInput,
+                onTagInputChange = { tagInput = it },
+                knownGroups = knownGroups,
+                knownTags = knownTags,
+            )
 
             FormSection(stringResource(R.string.section_advanced)) {
                 LangField(lang) { lang = it }

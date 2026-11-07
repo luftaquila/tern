@@ -51,6 +51,15 @@
     <string name="section_auth">Authentication</string>
     <string name="section_appearance">Color</string>
     <string name="section_advanced">Advanced</string>
+    <string name="section_organize">Group and tags</string>
+    <string name="field_group">Group</string>
+    <string name="field_group_none">No group</string>
+    <string name="field_tag_add">Add tag</string>
+    <string name="tag_hint">Separate several tags with commas</string>
+    <string name="tag_remove">Remove tag %1$s</string>
+    <string name="group_expand">Expand group</string>
+    <string name="group_collapse">Collapse group</string>
+    <string name="hosts_no_match">No hosts match</string>
     <string name="field_label">Name</string>
     <string name="field_label_hint">My server</string>
     <string name="field_hostname">Address</string>

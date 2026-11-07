@@ -23,6 +23,10 @@ data class Host(
     val encryptedPassword: String? = null,
     val keyId: String? = null,
     val colorIndex: Int = 0,
+    /** Group the host list shows the host under; empty = no group. */
+    val group: String = "",
+    /** Labels the host list can be filtered by, each made with [tagOf]. */
+    val tags: List<String> = emptyList(),
     /** LANG sent to the server; empty = don't send. */
     val lang: String = DEFAULT_LANG,
     val startupCommand: String = "",
@@ -44,8 +48,23 @@ data class Host(
         const val DEFAULT_LANG = "en_US.UTF-8"
         const val DEFAULT_TERM = "xterm-256color"
         val LANG_PRESETS = listOf("en_US.UTF-8", "ko_KR.UTF-8", "C.UTF-8", "")
+
+        private val WHITESPACE = Regex("\\s+")
+
+        /** [raw] as a group name: trimmed, each run of whitespace made one space. */
+        fun groupOf(raw: String): String = raw.trim().replace(WHITESPACE, " ")
+
+        /** [raw] as a tag: like [groupOf], without the leading `#` the host list shows tags with. */
+        fun tagOf(raw: String): String = groupOf(raw.trim().trimStart('#'))
     }
 }
+
+/** Group names in use, sorted, one spelling per name (groups differing only in case are one group). */
+fun List<Host>.groupNames(): List<String> =
+    map { it.group }.filter { it.isNotEmpty() }.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
+
+/** Tags in use, sorted, one spelling per tag. */
+fun List<Host>.tagNames(): List<String> = flatMap { it.tags }.distinctBy { it.lowercase() }.sortedBy { it.lowercase() }
 
 @Serializable
 enum class ForwardType { LOCAL, REMOTE, DYNAMIC }
@@ -170,6 +189,8 @@ data class AppSettings(
     val extraKeysExpanded: Boolean = false,
     /** Extra key size: 1 = 40 dp tall keys. */
     val extraKeysScale: Float = 1f,
+    /** Host groups folded in the host list, by lowercase name. */
+    val collapsedHostGroups: List<String> = emptyList(),
     /**
      * [SETTINGS_VERSION] the settings were last written with. Missing in older files (0), whose
      * values [migrated] brings up to date; fresh installs start at the current version.
