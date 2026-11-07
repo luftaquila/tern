@@ -11,6 +11,7 @@ import io.github.luftaquila.tern.data.KeyRepository
 import io.github.luftaquila.tern.data.KnownHostRepository
 import io.github.luftaquila.tern.data.SecretBox
 import io.github.luftaquila.tern.data.SettingsRepository
+import io.github.luftaquila.tern.data.SnippetRepository
 import io.github.luftaquila.tern.session.SessionManager
 import io.github.luftaquila.tern.ssh.SshSecurity
 import kotlinx.coroutines.CoroutineScope
@@ -36,6 +37,7 @@ class AppContainer(val context: Context) {
     val keys = KeyRepository(context.filesDir, scope)
     val knownHosts = KnownHostRepository(context.filesDir, scope)
     val settings = SettingsRepository(context.filesDir, scope)
+    val snippets = SnippetRepository(context.filesDir, scope)
     val sessions = SessionManager(this)
     val lock = io.github.luftaquila.tern.ui.lock.AppLock(settings)
     val purchases = io.github.luftaquila.tern.billing.Purchases(context)
@@ -47,5 +49,6 @@ class AppContainer(val context: Context) {
             keys.reencrypt(transform)
             settings.reencrypt(transform)
         }
+        snippets.adoptMacroKeys(settings)
     }
 }

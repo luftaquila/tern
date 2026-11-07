@@ -1,6 +1,6 @@
 # 개인정보처리방침 / Privacy Policy
 
-시행일 / Effective: 2026-11-07
+시행일 / Effective: 2026-11-08
 
 ## 한국어
 
@@ -12,7 +12,7 @@ Tern(이하 "앱")은 개인정보를 수집하지 않음
 - 개발자가 운영하는 서버로 보내는 데이터 없음
 
 **기기에 저장하는 정보**
-- 호스트 설정, 비밀번호, 개인 키, 앱 설정은 이 기기에만 저장
+- 호스트 설정, 스니펫, 비밀번호, 개인 키, 앱 설정은 이 기기에만 저장
 - 비밀번호와 개인 키는 Android Keystore의 키로 암호화
 - Android 백업과 기기 간 전송에서 제외, 앱을 삭제하면 함께 삭제
 - 내보낸 개인 키는 사용자가 고른 위치에 파일로 저장. 앱이 관리하거나 다른 곳으로 보내지 않음
@@ -57,7 +57,7 @@ Tern ("the app") collects no personal data.
 - Nothing sent to servers run by the developer
 
 **Data stored on the device**
-- Hosts, passwords, private keys and settings stored only on this device
+- Hosts, snippets, passwords, private keys and settings stored only on this device
 - Passwords and private keys encrypted with a key in the Android Keystore
 - Excluded from Android backups and device transfers; removed when the app is uninstalled
 - Exported private keys saved as files where you choose; the app does not manage them or send them anywhere

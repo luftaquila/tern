@@ -30,7 +30,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
@@ -50,7 +49,6 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -91,7 +89,6 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.toSize
@@ -103,7 +100,7 @@ import io.github.luftaquila.tern.R
 import io.github.luftaquila.tern.data.AppSettings
 import io.github.luftaquila.tern.data.ExtraKeyDef
 import io.github.luftaquila.tern.data.ExtraKeysConfig
-import io.github.luftaquila.tern.data.KeyTextEscapes
+import io.github.luftaquila.tern.data.Snippet
 import io.github.luftaquila.tern.data.SpecialKey
 import io.github.luftaquila.tern.terminal.ColorSchemes
 import io.github.luftaquila.tern.ui.LocalContainer
@@ -113,8 +110,8 @@ import io.github.luftaquila.tern.ui.terminal.KeyCap
 import io.github.luftaquila.tern.ui.terminal.KeyMetrics
 import io.github.luftaquila.tern.ui.terminal.LocalKeyMetrics
 import io.github.luftaquila.tern.ui.terminal.icon
+import io.github.luftaquila.tern.ui.snippets.SnippetDialog
 import io.github.luftaquila.tern.ui.terminal.label
-import io.github.luftaquila.tern.ui.theme.MonoFamily
 import kotlin.math.roundToInt
 
 /** A key in the editor. [id] tells duplicates (two "/" keys) apart while dragging. */
@@ -422,7 +419,7 @@ private fun special(vararg keys: SpecialKey) = keys.map { ExtraKeyDef.Special(it
 private val PALETTE_GROUPS: List<List<ExtraKeyDef>> = listOf(
     special(
         SpecialKey.ESC, SpecialKey.TAB, SpecialKey.ENTER, SpecialKey.BACKSPACE,
-        SpecialKey.CTRL, SpecialKey.ALT, SpecialKey.SHIFT, SpecialKey.KEYBOARD, SpecialKey.PASTE,
+        SpecialKey.CTRL, SpecialKey.ALT, SpecialKey.SHIFT, SpecialKey.KEYBOARD, SpecialKey.PASTE, SpecialKey.SNIPPETS,
     ),
     special(
         SpecialKey.LEFT, SpecialKey.DOWN, SpecialKey.UP, SpecialKey.RIGHT, SpecialKey.HOME, SpecialKey.END,
@@ -437,13 +434,7 @@ private val PALETTE_GROUPS: List<List<ExtraKeyDef>> = listOf(
         SpecialKey.F7, SpecialKey.F8, SpecialKey.F9, SpecialKey.F10, SpecialKey.F11, SpecialKey.F12,
     ),
     ExtraKeysConfig.SYMBOLS.map { ExtraKeyDef.Text(it) },
-    listOf(
-        ExtraKeyDef.Text("\u001b:wq\r", ":wq"),
-        ExtraKeyDef.Text("\u001b:q!\r", ":q!"),
-        ExtraKeyDef.Text("\u0002"), // Ctrl-B, the tmux prefix
-        ExtraKeyDef.Text("cd ..\r", "cd .."),
-        ExtraKeyDef.Text("exit\r", "exit"),
-    ),
+    ExtraKeysConfig.MACROS,
 )
 
 /** Space between palette keys, and between categories. */
@@ -464,6 +455,8 @@ fun ExtraKeysEditorScreen() {
     val view = LocalView.current
     val density = LocalDensity.current
     val settings by container.settings.settings.collectAsStateWithLifecycle()
+    val snippetList by container.snippets.snippets.collectAsStateWithLifecycle()
+    val snippets = remember(snippetList) { snippetList.associateBy { it.id } }
     val state = remember {
         KeysEditorState(container.settings.value.extraKeys.rows) { rows ->
             container.settings.update { it.copy(extraKeys = ExtraKeysConfig(rows)) }
@@ -473,7 +466,19 @@ fun ExtraKeysEditorScreen() {
     var scale by remember { mutableFloatStateOf(container.settings.value.extraKeysScale) }
     val metrics = remember(scale) { KeyMetrics(scale) }
     var editing by remember { mutableStateOf<EditorKey?>(null) }
-    var creatingMacro by remember { mutableStateOf(false) }
+    var creatingSnippet by remember { mutableStateOf(false) }
+
+    /**
+     * The key sending [text] with [name]: a text key for one character or a built-in macro,
+     * otherwise a key for the snippet with that name and text (saved first when there is none).
+     */
+    fun keyFor(name: String, text: String): ExtraKeyDef {
+        val key = ExtraKeyDef.Text(text, name.ifEmpty { null })
+        if (!key.isMacro || key in ExtraKeysConfig.MACROS) return key
+        val snippet = snippetList.firstOrNull { it.name == name && it.text == text }
+            ?: Snippet(name = name, text = text).also { container.snippets.upsert(it) }
+        return ExtraKeyDef.SnippetRef(snippet.id)
+    }
     var confirmReset by remember { mutableStateOf(false) }
     var overlayOrigin by remember { mutableStateOf(Offset.Zero) }
     val scheme = ColorSchemes.byId(settings.colorSchemeId)
@@ -625,19 +630,20 @@ fun ExtraKeysEditorScreen() {
                         },
                     ) { k ->
                         key(k.id) {
-                            EditorKeyCell(state, k, onEdit = { editing = it })
+                            EditorKeyCell(state, k, snippets, onEdit = { editing = it })
                         }
                     }
                 }
 
                 Palette(
                     state = state,
+                    snippets = snippetList,
                     modifier = Modifier.weight(1f),
                     onAdd = { def ->
                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         state.add(def)
                     },
-                    onNewMacro = { creatingMacro = true },
+                    onNewSnippet = { creatingSnippet = true },
                 )
             }
 
@@ -648,7 +654,7 @@ fun ExtraKeysEditorScreen() {
                 val delete = state.overDelete
                 CompositionLocalProvider(LocalKeyMetrics provides metrics) {
                     KeyCap(
-                        label = k.def.label(),
+                        label = k.def.label(snippets),
                         icon = k.def.icon(),
                         background = if (delete) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primaryContainer,
                         contentColor = if (delete) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimaryContainer,
@@ -672,33 +678,51 @@ fun ExtraKeysEditorScreen() {
     }
 
     editing?.let { k ->
-        val def = k.def as? ExtraKeyDef.Text
-        if (def == null) {
-            editing = null
-        } else {
-            TextKeyDialog(
-                initial = def,
+        when (val def = k.def) {
+            is ExtraKeyDef.Text -> SnippetDialog(
+                title = stringResource(R.string.ek_edit_title),
+                initialName = def.label.orEmpty(),
+                initialText = def.text,
+                confirmLabel = stringResource(R.string.action_save),
                 onDismiss = { editing = null },
-                onDelete = {
-                    state.remove(k.id)
-                    editing = null
-                },
-                onConfirm = { updated ->
-                    state.replace(k.id, updated)
+                onConfirm = { name, text ->
+                    state.replace(k.id, keyFor(name, text))
                     editing = null
                 },
             )
+            // Edits the snippet itself, wherever it is used.
+            is ExtraKeyDef.SnippetRef -> {
+                val snippet = snippets[def.id]
+                if (snippet == null) {
+                    editing = null
+                } else {
+                    SnippetDialog(
+                        title = stringResource(R.string.snippet_edit),
+                        initialName = snippet.name,
+                        initialText = snippet.text,
+                        confirmLabel = stringResource(R.string.action_save),
+                        onDismiss = { editing = null },
+                        onConfirm = { name, text ->
+                            container.snippets.upsert(snippet.copy(name = name, text = text))
+                            editing = null
+                        },
+                    )
+                }
+            }
+            is ExtraKeyDef.Special -> editing = null
         }
     }
 
-    if (creatingMacro) {
-        TextKeyDialog(
-            initial = null,
-            onDismiss = { creatingMacro = false },
-            onDelete = null,
-            onConfirm = { def ->
-                state.add(def)
-                creatingMacro = false
+    if (creatingSnippet) {
+        SnippetDialog(
+            title = stringResource(R.string.ek_snippet_new),
+            initialName = "",
+            initialText = "",
+            confirmLabel = stringResource(R.string.action_create),
+            onDismiss = { creatingSnippet = false },
+            onConfirm = { name, text ->
+                state.add(keyFor(name, text))
+                creatingSnippet = false
             },
         )
     }
@@ -721,7 +745,7 @@ fun ExtraKeysEditorScreen() {
 
 /** A key of the preview: the real key look, plus the tap menu. Fills the slot the row gives it. */
 @Composable
-private fun EditorKeyCell(state: KeysEditorState, k: EditorKey, onEdit: (EditorKey) -> Unit) {
+private fun EditorKeyCell(state: KeysEditorState, k: EditorKey, snippets: Map<String, Snippet>, onEdit: (EditorKey) -> Unit) {
     val isDragged = state.dragging?.id == k.id
     Box(
         Modifier
@@ -729,9 +753,9 @@ private fun EditorKeyCell(state: KeysEditorState, k: EditorKey, onEdit: (EditorK
             .graphicsLayer { alpha = if (isDragged) 0.3f else 1f },
         propagateMinConstraints = true,
     ) {
-        KeyCap(label = k.def.label(), icon = k.def.icon(), description = k.def.label())
+        KeyCap(label = k.def.label(snippets), icon = k.def.icon(), description = k.def.label(snippets))
         DropdownMenu(expanded = state.menuKey == k.id, onDismissRequest = { state.menuKey = null }) {
-            if (k.def is ExtraKeyDef.Text) {
+            if (k.def !is ExtraKeyDef.Special) {
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.action_edit)) },
                     leadingIcon = { Icon(Icons.Rounded.Edit, null) },
@@ -760,9 +784,10 @@ private fun EditorKeyCell(state: KeysEditorState, k: EditorKey, onEdit: (EditorK
 @Composable
 private fun Palette(
     state: KeysEditorState,
+    snippets: List<Snippet>,
     modifier: Modifier,
     onAdd: (ExtraKeyDef) -> Unit,
-    onNewMacro: () -> Unit,
+    onNewSnippet: () -> Unit,
 ) {
     var rowMenu by remember { mutableStateOf(false) }
     Box(modifier.fillMaxWidth().onGloballyPositioned { state.deleteZone = it.rootRect() }) {
@@ -828,16 +853,27 @@ private fun Palette(
                     ) {
                         val maxColumns = ((maxWidth + PALETTE_GAP) / (PALETTE_MIN_KEY + PALETTE_GAP)).toInt().coerceAtLeast(1)
                         Column(verticalArrangement = Arrangement.spacedBy(PALETTE_GROUP_GAP)) {
-                            PALETTE_GROUPS.forEach { group -> PaletteGrid(group, maxColumns, onAdd) }
+                            PALETTE_GROUPS.forEach { group -> PaletteGrid(group, emptyMap(), maxColumns, onAdd) }
+                            // The user's snippets, each addable as a key.
+                            if (snippets.isNotEmpty()) {
+                                Column(verticalArrangement = Arrangement.spacedBy(PALETTE_GAP)) {
+                                    Text(
+                                        stringResource(R.string.snippets_title),
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    PaletteGrid(snippets.map { ExtraKeyDef.SnippetRef(it.id) }, snippets.associateBy { it.id }, maxColumns, onAdd)
+                                }
+                            }
                             KeyCap(
-                                label = stringResource(R.string.ek_macro_new),
+                                label = stringResource(R.string.ek_snippet_new),
                                 icon = null,
                                 background = MaterialTheme.colorScheme.secondaryContainer,
                                 contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(PALETTE_METRICS.corner))
-                                    .clickable(onClick = onNewMacro),
+                                    .clickable(onClick = onNewSnippet),
                             )
                         }
                     }
@@ -871,7 +907,7 @@ private fun Palette(
  * [maxColumns] allows, the keys spread evenly over them, every key the same width.
  */
 @Composable
-private fun PaletteGrid(keys: List<ExtraKeyDef>, maxColumns: Int, onAdd: (ExtraKeyDef) -> Unit) {
+private fun PaletteGrid(keys: List<ExtraKeyDef>, snippets: Map<String, Snippet>, maxColumns: Int, onAdd: (ExtraKeyDef) -> Unit) {
     val rows = (keys.size + maxColumns - 1) / maxColumns
     val columns = (keys.size + rows - 1) / rows
     Column(verticalArrangement = Arrangement.spacedBy(PALETTE_GAP)) {
@@ -879,9 +915,9 @@ private fun PaletteGrid(keys: List<ExtraKeyDef>, maxColumns: Int, onAdd: (ExtraK
             Row(horizontalArrangement = Arrangement.spacedBy(PALETTE_GAP)) {
                 row.forEach { def ->
                     KeyCap(
-                        label = def.label(),
+                        label = def.label(snippets),
                         icon = def.icon(),
-                        description = def.label(),
+                        description = def.label(snippets),
                         background = MaterialTheme.colorScheme.surfaceContainerHighest,
                         modifier = Modifier
                             .weight(1f)
@@ -893,54 +929,4 @@ private fun PaletteGrid(keys: List<ExtraKeyDef>, maxColumns: Int, onAdd: (ExtraK
             }
         }
     }
-}
-
-/** Edits a text/macro key, or creates one when [initial] is null. */
-@Composable
-private fun TextKeyDialog(
-    initial: ExtraKeyDef.Text?,
-    onDismiss: () -> Unit,
-    onDelete: (() -> Unit)?,
-    onConfirm: (ExtraKeyDef.Text) -> Unit,
-) {
-    var label by remember { mutableStateOf(initial?.label.orEmpty()) }
-    var text by remember { mutableStateOf(initial?.let { KeyTextEscapes.format(it.text) }.orEmpty()) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(if (initial == null) R.string.ek_macro_new else R.string.ek_edit_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = label,
-                    onValueChange = { label = it },
-                    label = { Text(stringResource(R.string.ek_custom_label)) },
-                    placeholder = { Text("gs") },
-                    singleLine = true,
-                )
-                OutlinedTextField(
-                    value = text,
-                    onValueChange = { text = it },
-                    label = { Text(stringResource(R.string.ek_custom_text)) },
-                    placeholder = { Text("git status\\n", fontFamily = MonoFamily) },
-                    supportingText = { Text(stringResource(R.string.ek_custom_hint)) },
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(fontFamily = MonoFamily),
-                    keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, keyboardType = KeyboardType.Ascii),
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = text.isNotEmpty(), onClick = {
-                onConfirm(ExtraKeyDef.Text(KeyTextEscapes.parse(text), label.trim().ifEmpty { null }))
-            }) { Text(stringResource(if (initial == null) R.string.action_create else R.string.action_save)) }
-        },
-        dismissButton = {
-            Row {
-                if (onDelete != null) {
-                    TextButton(onClick = onDelete) { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) }
-                }
-                TextButton(onClick = onDismiss) { Text(stringResource(R.string.action_cancel)) }
-            }
-        },
-    )
 }

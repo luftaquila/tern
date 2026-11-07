@@ -39,6 +39,7 @@ sealed interface Route {
     data object KnownHosts : Route
     data object Licenses : Route
     data object ExtraKeysEditor : Route
+    data object Snippets : Route
     data object Fonts : Route
     data object Donate : Route
     data object AppLock : Route
@@ -126,6 +127,7 @@ fun TernNavHost(navigator: Navigator) {
                 Route.KnownHosts -> KnownHostsScreen()
                 Route.Licenses -> LicensesScreen()
                 Route.ExtraKeysEditor -> ExtraKeysEditorScreen()
+                Route.Snippets -> io.github.luftaquila.tern.ui.snippets.SnippetsScreen()
                 Route.Fonts -> io.github.luftaquila.tern.ui.settings.FontScreen()
                 Route.Donate -> io.github.luftaquila.tern.ui.settings.DonateScreen()
                 Route.AppLock -> io.github.luftaquila.tern.ui.lock.AppLockScreen()

@@ -6,11 +6,13 @@ package io.github.luftaquila.tern.data
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import java.util.UUID
 
 /** Keys with a fixed meaning that can be placed on the extra-keys bar. */
 @Serializable
 enum class SpecialKey(val repeatable: Boolean = false) {
-    KEYBOARD, PASTE,
+    /** KEYBOARD shows or hides the keyboard; SNIPPETS opens the list of snippets to send. */
+    KEYBOARD, PASTE, SNIPPETS,
     ESC, TAB, ENTER, BACKSPACE(true),
     CTRL, ALT, SHIFT,
     LEFT(true), DOWN(true), UP(true), RIGHT(true),
@@ -33,12 +35,22 @@ sealed interface ExtraKeyDef {
     data class Special(val key: SpecialKey) : ExtraKeyDef
 
     /**
-     * Sends [text]. A single character or plain text is typed (sticky CTRL/ALT apply to its first
-     * character); text with control characters (Enter, ESC, ...) is sent as-is, like a macro.
+     * Sends [text]: typed when plain (sticky CTRL/ALT apply to its first character), as-is when it
+     * has control characters (Enter, ESC, ...). One character, or one of [ExtraKeysConfig.MACROS];
+     * other text keys are snippets ([SnippetRef]), and older layouts' ones become snippets on
+     * load ([ExtraKeysConfig.macrosAsSnippets]).
      */
     @Serializable
     @SerialName("text")
-    data class Text(val text: String, val label: String? = null) : ExtraKeyDef
+    data class Text(val text: String, val label: String? = null) : ExtraKeyDef {
+        /** A key with its own label or more than one character: a snippet unless built in. */
+        val isMacro: Boolean get() = !label.isNullOrBlank() || text.codePointCount(0, text.length) > 1
+    }
+
+    /** Sends the [Snippet] with this [id], labelled with its name. */
+    @Serializable
+    @SerialName("snippet")
+    data class SnippetRef(val id: String) : ExtraKeyDef
 }
 
 /** Rows of the extra-keys bar: row 0 is always shown, the others when the bar is expanded. */
@@ -88,6 +100,49 @@ data class ExtraKeysConfig(val rows: List<List<ExtraKeyDef>>) {
             "/", "-", "_", "|", "~", "`", "\\", ":", ";", "$", "*", "&", "#", "@", "!", "?", "%", "^",
             "=", "+", "<", ">", "{", "}", "[", "]", "(", ")", "'", "\"", ",", ".",
         )
+
+        /** Built-in command keys offered in the key picker; they stay text keys, not snippets. */
+        val MACROS: List<ExtraKeyDef.Text> = listOf(
+            ExtraKeyDef.Text("\u001b:wq\r", ":wq"),
+            ExtraKeyDef.Text("\u001b:q!\r", ":q!"),
+            ExtraKeyDef.Text("\u0002"), // Ctrl-B, the tmux prefix
+            ExtraKeyDef.Text("cd ..\r", "cd .."),
+            ExtraKeyDef.Text("exit\r", "exit"),
+        )
+    }
+
+    fun hasSnippet(id: String): Boolean = rows.any { row -> row.any { it is ExtraKeyDef.SnippetRef && it.id == id } }
+
+    /** This layout with a key for snippet [id] at the end of the first row. */
+    fun withSnippet(id: String): ExtraKeysConfig {
+        val key = ExtraKeyDef.SnippetRef(id)
+        return ExtraKeysConfig(if (rows.isEmpty()) listOf(listOf(key)) else rows.mapIndexed { i, row -> if (i == 0) row + key else row })
+    }
+
+    /** This layout without the keys for snippet [id]. */
+    fun withoutSnippet(id: String): ExtraKeysConfig =
+        ExtraKeysConfig(rows.map { row -> row.filterNot { it is ExtraKeyDef.SnippetRef && it.id == id } })
+
+    /**
+     * This layout with each macro key ([ExtraKeyDef.Text.isMacro], other than [MACROS]) turned into
+     * a key for the snippet with the same name and text: one of [snippets], or a new one made with
+     * [newId]. Returns the layout and the new snippets.
+     */
+    fun macrosAsSnippets(snippets: List<Snippet>, newId: () -> String = { UUID.randomUUID().toString() }): Pair<ExtraKeysConfig, List<Snippet>> {
+        val added = ArrayList<Snippet>()
+        val converted = rows.map { row ->
+            row.map { key ->
+                if (key !is ExtraKeyDef.Text || !key.isMacro || key in MACROS) {
+                    key
+                } else {
+                    val name = key.label?.trim().orEmpty()
+                    val snippet = (snippets + added).firstOrNull { it.name == name && it.text == key.text }
+                        ?: Snippet(newId(), name, key.text).also(added::add)
+                    ExtraKeyDef.SnippetRef(snippet.id)
+                }
+            }
+        }
+        return ExtraKeysConfig(converted) to added
     }
 }
 
@@ -142,4 +197,18 @@ object KeyTextEscapes {
 
     /** True if [text] contains control characters, i.e. it must be sent raw rather than typed. */
     fun isRaw(text: String): Boolean = text.any { it < ' ' || it == '\u007f' }
+
+    /** [text] for a key or list label: Enter, Tab and ESC as symbols, other control characters as ^X. */
+    fun display(text: String): String = buildString {
+        for (c in text) {
+            append(
+                when (c) {
+                    '\r', '\n' -> "⏎"
+                    '\t' -> "⇥"
+                    '\u001b' -> "⎋"
+                    else -> if (c < ' ') "^" + (c.code + 64).toChar() else c.toString()
+                },
+            )
+        }
+    }
 }

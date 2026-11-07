@@ -132,6 +132,9 @@ fun SettingsTab(modifier: Modifier = Modifier) {
             NavRow(stringResource(R.string.settings_extra_keys_config), stringResource(R.string.settings_extra_keys_config_desc)) {
                 navigator.push(Route.ExtraKeysEditor)
             }
+            NavRow(stringResource(R.string.snippets_title), stringResource(R.string.settings_snippets_desc)) {
+                navigator.push(Route.Snippets)
+            }
         }
 
         SettingsSection(stringResource(R.string.settings_terminal)) {

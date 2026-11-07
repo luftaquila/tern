@@ -5,6 +5,7 @@
 package io.github.luftaquila.tern.ui.terminal
 
 import android.app.Activity
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -24,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.automirrored.rounded.TextSnippet
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
@@ -106,6 +108,22 @@ private fun TerminalContent(session: TerminalSession, sessions: List<TerminalSes
     val prompt by session.prompts.pending.collectAsStateWithLifecycle()
     val modifiers = remember { StickyModifiers() }
     var terminalView by remember { mutableStateOf<TerminalView?>(null) }
+    val snippets by container.snippets.snippets.collectAsStateWithLifecycle()
+    val snippetsById = remember(snippets) { snippets.associateBy { it.id } }
+    var showSnippets by remember { mutableStateOf(false) }
+    BackHandler(enabled = showSnippets) { showSnippets = false }
+    val actions = remember {
+        object : ExtraKeyActions {
+            override fun onKey(key: TerminalKey) { terminalView?.sendKey(key) }
+            override fun onText(text: String) { terminalView?.sendTypedText(text) }
+            override fun onRaw(text: String) { terminalView?.sendRaw(text) }
+            override fun onCtrl(letter: Char) { terminalView?.sendCtrl(letter) }
+            override fun onPaste() { terminalView?.pasteFromClipboard() }
+            override fun onToggleKeyboard() { terminalView?.toggleKeyboard() }
+            override fun onSnippets() { showSnippets = !showSnippets }
+            override fun onModifierArmed() { terminalView?.commitImeComposition() }
+        }
+    }
 
     /** Opens a non-terminal screen: finish the IME composition and put the keyboard away first. */
     fun leaveTerminal(route: Route) {
@@ -171,6 +189,7 @@ private fun TerminalContent(session: TerminalSession, sessions: List<TerminalSes
             },
             onToggleExtraKeys = { container.settings.update { it.copy(showExtraKeys = !it.showExtraKeys) } },
             onEditExtraKeys = { leaveTerminal(Route.ExtraKeysEditor) },
+            onSnippets = { showSnippets = true },
             onReconnect = { session.reconnect() },
             onClose = {
                 container.sessions.close(session.id)
@@ -214,21 +233,26 @@ private fun TerminalContent(session: TerminalSession, sessions: List<TerminalSes
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
+            if (showSnippets) {
+                SnippetPanel(
+                    snippets = snippets,
+                    onSend = { snippet ->
+                        showSnippets = false
+                        actions.sendText(snippet.text)
+                    },
+                    onManage = {
+                        showSnippets = false
+                        leaveTerminal(Route.Snippets)
+                    },
+                    onClose = { showSnippets = false },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
         if (settings.showExtraKeys) {
-            val actions = remember {
-                object : ExtraKeyActions {
-                    override fun onKey(key: TerminalKey) { terminalView?.sendKey(key) }
-                    override fun onText(text: String) { terminalView?.sendTypedText(text) }
-                    override fun onRaw(text: String) { terminalView?.sendRaw(text) }
-                    override fun onCtrl(letter: Char) { terminalView?.sendCtrl(letter) }
-                    override fun onPaste() { terminalView?.pasteFromClipboard() }
-                    override fun onToggleKeyboard() { terminalView?.toggleKeyboard() }
-                    override fun onModifierArmed() { terminalView?.commitImeComposition() }
-                }
-            }
             ExtraKeysBar(
                 config = settings.extraKeys,
+                snippets = snippetsById,
                 modifiers = modifiers,
                 expanded = settings.extraKeysExpanded,
                 onExpandedChange = { open -> container.settings.update { it.copy(extraKeysExpanded = open) } },
@@ -258,6 +282,7 @@ private fun TerminalTopBar(
     onFontSize: (Float) -> Unit,
     onToggleExtraKeys: () -> Unit,
     onEditExtraKeys: () -> Unit,
+    onSnippets: () -> Unit,
     onReconnect: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -343,6 +368,11 @@ private fun TerminalTopBar(
                     text = { Text(stringResource(R.string.action_edit_extra_keys)) },
                     leadingIcon = { Icon(Icons.Rounded.Edit, null) },
                     onClick = { menu = false; onEditExtraKeys() },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.snippets_title)) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Rounded.TextSnippet, null) },
+                    onClick = { menu = false; onSnippets() },
                 )
                 if (state is SessionState.Disconnected) {
                     DropdownMenuItem(

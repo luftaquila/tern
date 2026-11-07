@@ -1,7 +1,7 @@
 # AGENTS.md
 
 - Android SSH and SFTP terminal with IME composition input: a JVM terminal emulator, an SSH layer on sshj and a Compose app
-- Locations: emulator `terminal`, SSH and SFTP `ssh`, app `app` (IME `input`, terminal view `termview`, sessions `session`, stores `data`, billing `billing`, app lock `ui/lock`, extra keys `ui/terminal/ExtraKeysBar.kt`), table generators `terminal/tools/gen_wcwidth.py` and `app/tools/gen_nerd_font_coverage.py`
+- Locations: emulator `terminal`, SSH and SFTP `ssh`, app `app` (IME `input`, terminal view `termview`, sessions `session`, stores `data`, billing `billing`, app lock `ui/lock`, extra keys `ui/terminal/ExtraKeysBar.kt`, snippets `ui/snippets`), table generators `terminal/tools/gen_wcwidth.py` and `app/tools/gen_nerd_font_coverage.py`
 
 ## AGENTS.md writing rules
 - Terse bullets, noun phrases, no ambiguous wording
@@ -67,9 +67,12 @@
 
 ## Extra keys
 - Bar and editor preview from the same `ExtraKeysBarLayout`, `KeyRow` and `KeyCap`, sized by `KeyMetrics`
-- Bar keys on raw pointer input, never `clickable`; keys fire on release
+- Bar keys and the snippet panel (`SnippetPanel`) on raw pointer input, never `clickable`; taps fire on release
 - Editor taps and drags in one gesture detector on the preview, not per key
-- Text keys without control characters through `sendTypedText`; macros through `sendRaw`
+- Text keys and snippets sent through `ExtraKeyActions.sendText`: without control characters through `sendTypedText`, otherwise `sendRaw`
+- `ExtraKeyDef.Text`: one character or one of `ExtraKeysConfig.MACROS`; any other command key a snippet key (`ExtraKeyDef.SnippetRef`)
+  - Macro keys of older layouts turned into snippet keys at startup (`SnippetRepository.adoptMacroKeys`)
+- Deleting a snippet removes its keys (`SnippetRepository.delete`)
 
 ## Hosts
 - One group per host (`Host.group`), groups differing only in case shown as one

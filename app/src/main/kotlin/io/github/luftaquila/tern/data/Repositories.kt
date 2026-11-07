@@ -85,6 +85,37 @@ class KnownHostRepository(dir: File, scope: CoroutineScope) : KnownHostsStore {
     fun delete(entry: KnownHostEntry) = store.update { list -> list.filterNot { it == entry } }
 }
 
+class SnippetRepository(dir: File, scope: CoroutineScope) {
+    private val store = JsonStore(File(dir, "snippets.json"), ListSerializer(Snippet.serializer()), emptyList(), scope)
+    val snippets: StateFlow<List<Snippet>> = store.state
+    val value: List<Snippet> get() = store.value
+
+    fun get(id: String): Snippet? = store.value.firstOrNull { it.id == id }
+
+    /** Replaces the snippets with the same ids, adds the others. */
+    fun upsert(vararg snippets: Snippet) = upsertAll(snippets.asList())
+
+    fun upsertAll(snippets: List<Snippet>) = store.update { list ->
+        val byId = snippets.associateBy { it.id }
+        list.map { byId[it.id] ?: it } + snippets.filter { new -> list.none { it.id == new.id } }
+    }
+
+    /** Deletes the snippet and its keys on the extra-keys bar. */
+    fun delete(id: String, settings: SettingsRepository) {
+        store.update { list -> list.filterNot { it.id == id } }
+        settings.update { it.copy(extraKeys = it.extraKeys.withoutSnippet(id)) }
+    }
+
+    /** Turns macro keys of the extra-keys layout into snippet keys ([ExtraKeysConfig.macrosAsSnippets]). */
+    fun adoptMacroKeys(settings: SettingsRepository) {
+        val (config, added) = settings.value.extraKeys.macrosAsSnippets(store.value)
+        if (config == settings.value.extraKeys) return
+        store.update { it + added }
+        store.flush() // the snippets are saved before any key points at them
+        settings.update { it.copy(extraKeys = config) }
+    }
+}
+
 class SettingsRepository(dir: File, scope: CoroutineScope) {
     private val store = JsonStore(
         File(dir, "settings.json"),

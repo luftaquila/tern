@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Backspace
 import androidx.compose.material.icons.automirrored.rounded.KeyboardReturn
+import androidx.compose.material.icons.automirrored.rounded.TextSnippet
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Keyboard
@@ -68,6 +69,7 @@ import io.github.luftaquila.tern.R
 import io.github.luftaquila.tern.data.ExtraKeyDef
 import io.github.luftaquila.tern.data.ExtraKeysConfig
 import io.github.luftaquila.tern.data.KeyTextEscapes
+import io.github.luftaquila.tern.data.Snippet
 import io.github.luftaquila.tern.data.SpecialKey
 import io.github.luftaquila.tern.input.ModifierLatch
 import io.github.luftaquila.tern.input.StickyModifiers
@@ -86,8 +88,14 @@ interface ExtraKeyActions {
     fun onPaste()
     fun onToggleKeyboard()
 
+    /** Opens the list of snippets to send. */
+    fun onSnippets()
+
     /** CTRL or ALT was armed: an unfinished IME syllable must not absorb the next jamo. */
     fun onModifierArmed()
+
+    /** Sends a text key's or snippet's [text]: typed when plain, as-is with control characters. */
+    fun sendText(text: String) = if (KeyTextEscapes.isRaw(text)) onRaw(text) else onText(text)
 
     companion object {
         val NONE = object : ExtraKeyActions {
@@ -97,6 +105,7 @@ interface ExtraKeyActions {
             override fun onCtrl(letter: Char) {}
             override fun onPaste() {}
             override fun onToggleKeyboard() {}
+            override fun onSnippets() {}
             override fun onModifierArmed() {}
         }
     }
@@ -105,6 +114,7 @@ interface ExtraKeyActions {
 fun SpecialKey.label(): String = when (this) {
     SpecialKey.KEYBOARD -> "⌨"
     SpecialKey.PASTE -> "PASTE"
+    SpecialKey.SNIPPETS -> "SNIPPETS"
     SpecialKey.ESC -> "ESC"
     SpecialKey.TAB -> "TAB"
     SpecialKey.ENTER -> "⏎"
@@ -128,6 +138,7 @@ fun SpecialKey.label(): String = when (this) {
 internal fun SpecialKey.icon(): ImageVector? = when (this) {
     SpecialKey.KEYBOARD -> Icons.Rounded.Keyboard
     SpecialKey.PASTE -> Icons.Rounded.ContentPaste
+    SpecialKey.SNIPPETS -> Icons.AutoMirrored.Rounded.TextSnippet
     // The ⏎ and ⌫ glyphs are tiny in most fonts.
     SpecialKey.ENTER -> Icons.AutoMirrored.Rounded.KeyboardReturn
     SpecialKey.BACKSPACE -> Icons.AutoMirrored.Rounded.Backspace
@@ -136,21 +147,14 @@ internal fun SpecialKey.icon(): ImageVector? = when (this) {
 
 internal fun ExtraKeyDef.icon(): ImageVector? = (this as? ExtraKeyDef.Special)?.key?.icon()
 
-/** Visible label of a key: its custom label, or the text with control characters made visible. */
-fun ExtraKeyDef.label(): String = when (this) {
+/**
+ * Visible label of a key: its custom label, the text with control characters made visible, or
+ * for a snippet key the name of its snippet in [snippets].
+ */
+fun ExtraKeyDef.label(snippets: Map<String, Snippet> = emptyMap()): String = when (this) {
     is ExtraKeyDef.Special -> key.label()
-    is ExtraKeyDef.Text -> label?.takeIf { it.isNotBlank() } ?: buildString {
-        for (c in text) {
-            append(
-                when (c) {
-                    '\r', '\n' -> "⏎"
-                    '\t' -> "⇥"
-                    '\u001b' -> "⎋"
-                    else -> if (c < ' ') "^" + (c.code + 64).toChar() else c.toString()
-                },
-            )
-        }
-    }
+    is ExtraKeyDef.Text -> label?.takeIf { it.isNotBlank() } ?: KeyTextEscapes.display(text)
+    is ExtraKeyDef.SnippetRef -> snippets[id]?.title.orEmpty()
 }
 
 private fun SpecialKey.terminalKey(): TerminalKey? = when (this) {
@@ -219,6 +223,7 @@ private val BAR_PADDING_V = 3.dp
 @Composable
 fun ExtraKeysBar(
     config: ExtraKeysConfig,
+    snippets: Map<String, Snippet>,
     modifiers: StickyModifiers,
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
@@ -242,19 +247,26 @@ fun ExtraKeysBar(
                 SpecialKey.SHIFT -> modifiers.toggleShift()
                 SpecialKey.KEYBOARD -> actions.onToggleKeyboard()
                 SpecialKey.PASTE -> actions.onPaste()
+                SpecialKey.SNIPPETS -> actions.onSnippets()
                 else -> {
                     val letter = k.ctrlLetter
                     if (letter != null) actions.onCtrl(letter) else k.terminalKey()?.let(actions::onKey)
                 }
             }
-            is ExtraKeyDef.Text -> if (KeyTextEscapes.isRaw(key.text)) actions.onRaw(key.text) else actions.onText(key.text)
+            is ExtraKeyDef.Text -> actions.sendText(key.text)
+            is ExtraKeyDef.SnippetRef -> snippets[key.id]?.let { actions.sendText(it.text) }
         }
+    }
+
+    // Keys of deleted snippets are left out.
+    val rows = remember(config, snippets) {
+        config.rows.map { row -> row.filter { it !is ExtraKeyDef.SnippetRef || it.id in snippets } }
     }
 
     val editDescription = stringResource(R.string.action_edit_extra_keys)
     CompositionLocalProvider(LocalKeyMetrics provides remember(scale) { KeyMetrics(scale) }) {
         ExtraKeysBarLayout(
-            rows = config.rows,
+            rows = rows,
             expanded = expanded,
             background = background,
             modifier = modifier,
@@ -277,7 +289,7 @@ fun ExtraKeysBar(
                 else -> ModifierLatch.OFF
             }
             KeyButton(
-                label = key.label(),
+                label = key.label(snippets),
                 icon = special?.icon(),
                 latch = latch,
                 repeat = special?.repeatable == true,
