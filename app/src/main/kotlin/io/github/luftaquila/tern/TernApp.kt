@@ -38,7 +38,7 @@ class AppContainer(val context: Context) {
     val settings = SettingsRepository(context.filesDir, scope)
     val sessions = SessionManager(this)
     val lock = io.github.luftaquila.tern.ui.lock.AppLock(settings)
-    val purchases = io.github.luftaquila.tern.billing.Purchases(context, settings)
+    val purchases = io.github.luftaquila.tern.billing.Purchases(context)
 
     init {
         // Secrets saved under an earlier Keystore alias move to the current key before anything reads them.

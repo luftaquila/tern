@@ -33,7 +33,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -66,29 +65,14 @@ internal val ForwardsSaver = Saver<List<ForwardRule>, String>(
 /** Lowest port an app may listen on; lower ones need root. */
 private const val FIRST_UNPRIVILEGED_PORT = 1024
 
-@Composable
-fun ProBadge() {
-    Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-        Text(
-            "Pro",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-        )
-    }
-}
-
-/** Picks the host to connect through. Without Pro, opening the list asks for Pro instead. */
+/** Picks the host to connect through. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun JumpHostSection(selected: Host?, candidates: List<Host>, pro: Boolean, onSelect: (Host?) -> Unit, onNeedPro: () -> Unit) {
-    FormSection(stringResource(R.string.section_jump), showProBadge = !pro) {
+internal fun JumpHostSection(selected: Host?, candidates: List<Host>, onSelect: (Host?) -> Unit) {
+    FormSection(stringResource(R.string.section_jump)) {
         var expanded by remember { mutableStateOf(false) }
         val direct = stringResource(R.string.jump_none)
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { open -> if (open && !pro) onNeedPro() else expanded = open },
-        ) {
+        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
             OutlinedTextField(
                 value = selected?.displayName ?: direct,
                 onValueChange = {},
@@ -123,14 +107,14 @@ internal fun JumpHostSection(selected: Host?, candidates: List<Host>, pro: Boole
 
 /** The host's port forwards; tapping one edits it. */
 @Composable
-internal fun ForwardsSection(forwards: List<ForwardRule>, pro: Boolean, onChange: (List<ForwardRule>) -> Unit, onNeedPro: () -> Unit) {
+internal fun ForwardsSection(forwards: List<ForwardRule>, onChange: (List<ForwardRule>) -> Unit) {
     // Index being edited; forwards.size means a new one.
     var editing by remember { mutableStateOf<Int?>(null) }
-    FormSection(stringResource(R.string.section_forwarding), showProBadge = !pro) {
+    FormSection(stringResource(R.string.section_forwarding)) {
         forwards.forEachIndexed { i, rule ->
-            ForwardRow(rule) { if (pro) editing = i else onNeedPro() }
+            ForwardRow(rule) { editing = i }
         }
-        OutlinedButton(onClick = { if (pro) editing = forwards.size else onNeedPro() }, modifier = Modifier.fillMaxWidth()) {
+        OutlinedButton(onClick = { editing = forwards.size }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Rounded.Add, null, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.forward_add))
@@ -299,8 +283,8 @@ private fun ForwardDialog(initial: ForwardRule?, onSave: (ForwardRule) -> Unit, 
 
 /** Agent forwarding switch, with what it allows and when to use it. */
 @Composable
-internal fun AgentSection(enabled: Boolean, pro: Boolean, onChange: (Boolean) -> Unit, onNeedPro: () -> Unit) {
-    FormSection(stringResource(R.string.section_agent), showProBadge = !pro) {
+internal fun AgentSection(enabled: Boolean, onChange: (Boolean) -> Unit) {
+    FormSection(stringResource(R.string.section_agent)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 stringResource(R.string.agent_desc),
@@ -309,7 +293,7 @@ internal fun AgentSection(enabled: Boolean, pro: Boolean, onChange: (Boolean) ->
                 modifier = Modifier.weight(1f),
             )
             Spacer(Modifier.width(12.dp))
-            Switch(checked = enabled, onCheckedChange = { if (pro) onChange(it) else onNeedPro() })
+            Switch(checked = enabled, onCheckedChange = onChange)
         }
     }
 }

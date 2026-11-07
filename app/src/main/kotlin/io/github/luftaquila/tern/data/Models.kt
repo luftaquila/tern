@@ -28,11 +28,11 @@ data class Host(
     val startupCommand: String = "",
     val termType: String = DEFAULT_TERM,
     val keepAliveSeconds: Int = 30,
-    /** Host to connect through first (`ssh -J`, Pro); null connects directly. */
+    /** Host to connect through first (`ssh -J`); null connects directly. */
     val jumpHostId: String? = null,
-    /** Port forwards opened with every terminal session (Pro). */
+    /** Port forwards opened with every terminal session. */
     val forwards: List<ForwardRule> = emptyList(),
-    /** Lets programs on the server sign in elsewhere with this app's keys (`ssh -A`, Pro). */
+    /** Lets programs on the server sign in elsewhere with this app's keys (`ssh -A`). */
     val agentForwarding: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
     val lastUsedAt: Long = 0,
@@ -51,7 +51,7 @@ data class Host(
 enum class ForwardType { LOCAL, REMOTE, DYNAMIC }
 
 /**
- * A port forward of a host (Pro). [port] is listened on: this device's loopback interface for
+ * A port forward of a host. [port] is listened on: this device's loopback interface for
  * [ForwardType.LOCAL] and [ForwardType.DYNAMIC] (a SOCKS proxy), the server's for
  * [ForwardType.REMOTE]. Connections go to [destHost]:[destPort] as seen from the other side;
  * a SOCKS proxy has no fixed destination.
@@ -137,8 +137,6 @@ data class AppSettings(
      */
     val fallbackFont: TerminalFont = TerminalFont.JETENDARD,
     val fallbackFontFile: String? = null,
-    /** Tern Pro bought (cached from Play so it works offline; Play's answer wins). */
-    val proUnlocked: Boolean = false,
     /** Programming ligatures (`->`, `!=`, ...) in fonts that have them; off by default. */
     val ligatures: Boolean = false,
     val fontSizeSp: Float = 13f,

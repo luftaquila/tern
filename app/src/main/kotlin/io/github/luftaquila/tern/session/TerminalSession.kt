@@ -215,8 +215,6 @@ class TerminalSession(
         _state.value = SessionState.Connecting
         val context = container.context
         val connector = HostConnector(container, prompts)
-        val pro = container.purchases.pro.value
-        if (connector.lacksPro(host)) printStatus(dim(context.getString(R.string.status_without_pro)))
         var conn: SshConnection? = null
         try {
             conn = connector.connect(host) { hop, via ->
@@ -235,14 +233,14 @@ class TerminalSession(
             }
             connection = conn
             conn.setOnDisconnect { cause -> if (cause != null) onEnded(describeError(context, cause)) }
-            if (pro) startForwards(conn)
+            startForwards(conn)
             val env = buildMap {
                 if (host.lang.isNotBlank()) put("LANG", host.lang)
                 // iTerm2's way of being recognized across SSH (sshd usually accepts LC_*):
                 // programs such as gitoui then draw images with the iTerm2 protocol.
                 if (container.settings.value.advertiseInlineImages) put("LC_TERMINAL", "iTerm2")
             }
-            val agent = if (pro && host.agentForwarding) connector.agent() else null
+            val agent = if (host.agentForwarding) connector.agent() else null
             val sh = conn.openShell(host.termType, columns, rows, widthPx, heightPx, env, agent)
             shell = sh
             _state.value = SessionState.Connected

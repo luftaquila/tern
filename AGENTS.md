@@ -71,11 +71,9 @@
 - Editor taps and drags in one gesture detector on the preview, not per key
 - Text keys without control characters through `sendTypedText`; macros through `sendRaw`
 
-## Pro and billing
-- `Products.UNLOCK_PRO` purchases acknowledged and kept; `REPEAT` products and `donate_small` consumed
-- An owned donation bought again as its `REPEAT` product (`Products.donationToBuy`)
-- Pro: debug builds or an owned `UNLOCK_PRO` product, cached in `AppSettings.proUnlocked`, cleared when Play stops reporting it
-- Pro settings kept without Pro but not applied; the session says so
+## Billing
+- Donations only (`Products.DONATIONS`), each consumed once paid
+- No feature behind a purchase
 - `container.lock.beforeExternalPicker()` before the Play purchase sheet and file pickers
 
 ## App lock

@@ -73,7 +73,6 @@ import io.github.luftaquila.tern.data.SecretBox
 import io.github.luftaquila.tern.session.HostConnector
 import io.github.luftaquila.tern.ui.LocalContainer
 import io.github.luftaquila.tern.ui.LocalNavigator
-import io.github.luftaquila.tern.ui.Route
 import io.github.luftaquila.tern.ui.theme.HostColors
 import io.github.luftaquila.tern.ui.theme.MonoFamily
 
@@ -85,7 +84,6 @@ fun HostEditScreen(hostId: String?) {
     val original = remember(hostId) { hostId?.let { container.hosts.get(it) } }
     val keys by container.keys.keys.collectAsStateWithLifecycle()
     val hosts by container.hosts.hosts.collectAsStateWithLifecycle()
-    val pro by container.purchases.pro.collectAsStateWithLifecycle()
 
     var label by rememberSaveable { mutableStateOf(original?.label ?: "") }
     var hostname by rememberSaveable { mutableStateOf(original?.hostname ?: "") }
@@ -331,16 +329,13 @@ fun HostEditScreen(hostId: String?) {
                 }
             }
 
-            val needPro = { navigator.push(Route.Pro) }
             JumpHostSection(
                 selected = jumpCandidates.firstOrNull { it.id == jumpHostId },
                 candidates = jumpCandidates,
-                pro = pro,
                 onSelect = { jumpHostId = it?.id },
-                onNeedPro = needPro,
             )
-            ForwardsSection(forwards, pro, onChange = { forwards = it }, onNeedPro = needPro)
-            AgentSection(agentForwarding, pro, onChange = { agentForwarding = it }, onNeedPro = needPro)
+            ForwardsSection(forwards, onChange = { forwards = it })
+            AgentSection(agentForwarding, onChange = { agentForwarding = it })
 
             Button(onClick = ::save, modifier = Modifier.fillMaxWidth().height(52.dp)) {
                 Text(stringResource(R.string.action_save))
@@ -380,20 +375,14 @@ private fun LangField(value: String, onChange: (String) -> Unit) {
 }
 
 @Composable
-fun FormSection(title: String, showProBadge: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+fun FormSection(title: String, content: @Composable ColumnScope.() -> Unit) {
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surfaceContainer,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
-                if (showProBadge) {
-                    Spacer(Modifier.width(8.dp))
-                    ProBadge()
-                }
-            }
+            Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
             content()
         }
     }

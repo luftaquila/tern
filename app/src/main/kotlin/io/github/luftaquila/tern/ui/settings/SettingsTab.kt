@@ -171,13 +171,8 @@ fun SettingsTab(modifier: Modifier = Modifier) {
             }
         }
 
-        SettingsSection(stringResource(R.string.pro_title)) {
-            val pro by container.purchases.pro.collectAsStateWithLifecycle()
-            NavRow(
-                stringResource(R.string.pro_title),
-                stringResource(if (pro) R.string.pro_owned else R.string.pro_summary),
-            ) { navigator.push(Route.Pro) }
-            NavRow(stringResource(R.string.donate_title), stringResource(R.string.donate_summary)) { navigator.push(Route.Pro) }
+        SettingsSection(stringResource(R.string.donate_section)) {
+            NavRow(stringResource(R.string.donate_title), stringResource(R.string.donate_summary)) { navigator.push(Route.Donate) }
         }
 
         SettingsSection(stringResource(R.string.settings_about)) {

@@ -40,7 +40,7 @@ sealed interface Route {
     data object Licenses : Route
     data object ExtraKeysEditor : Route
     data object Fonts : Route
-    data object Pro : Route
+    data object Donate : Route
     data object AppLock : Route
     data class LockSetup(val type: io.github.luftaquila.tern.data.LockType, val enableBiometric: Boolean = false) : Route
 }
@@ -127,7 +127,7 @@ fun TernNavHost(navigator: Navigator) {
                 Route.Licenses -> LicensesScreen()
                 Route.ExtraKeysEditor -> ExtraKeysEditorScreen()
                 Route.Fonts -> io.github.luftaquila.tern.ui.settings.FontScreen()
-                Route.Pro -> io.github.luftaquila.tern.ui.settings.ProScreen()
+                Route.Donate -> io.github.luftaquila.tern.ui.settings.DonateScreen()
                 Route.AppLock -> io.github.luftaquila.tern.ui.lock.AppLockScreen()
                 is Route.LockSetup -> io.github.luftaquila.tern.ui.lock.LockSetupScreen(route.type, route.enableBiometric)
             }

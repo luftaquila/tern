@@ -24,9 +24,9 @@ Tern(이하 "앱")은 개인정보를 수집하지 않음
 - 에이전트 포워딩: 켠 서버가 앱에 서명을 요청할 수 있음. 서명은 기기 안에서 만들고 개인 키는 기기 밖으로 나가지 않음
 
 **결제**
-- Tern Pro와 후원은 Google Play 결제 시스템으로 처리
+- 후원은 Google Play 결제 시스템으로 처리
 - 결제 정보는 Google이 직접 받아 처리하며 앱은 볼 수 없음
-- 앱은 Pro 구매 여부만 Google Play에 확인해 이 기기에 저장
+- 앱은 후원 완료 처리에 필요한 구매 정보만 Google Play에서 받고 저장하지 않음
 - 결제에는 Google의 개인정보처리방침 적용
 
 **권한**
@@ -69,9 +69,9 @@ Tern ("the app") collects no personal data.
 - Agent forwarding: a server you enable it for can ask the app for signatures; signatures made on the device, private keys never leave it
 
 **Payments**
-- Tern Pro and donations processed by Google Play's billing system
+- Donations processed by Google Play's billing system
 - Payment details received and handled by Google; the app cannot see them
-- The app only asks Google Play whether Pro was bought and remembers that on this device
+- The app only receives the purchase details it needs from Google Play to complete a donation and stores none of them
 - Google's privacy policy applies to payments
 
 **Permissions**
