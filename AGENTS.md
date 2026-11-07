@@ -44,6 +44,7 @@
   - Counts as composing for `restartInput`
 - Each IME edit method in its own batch
 - Pending composition sent without sticky modifiers (`TerminalView.commitComposition`); arming CTRL/ALT commits the composition first
+- Leaving the terminal screen only through `exitTerminal`: composition committed and keyboard hidden first
 - Predicted echo (`TerminalView.pendingEcho`) kept until the cursor advances by exactly its width; dropped on any other cursor movement or timeout
 - `IME_FLAG_NO_PERSONALIZED_LEARNING` only with `AppSettings.imeIncognito`
 - IME call tracing (`TernIme`) in debug builds only; typed text never logged in release builds

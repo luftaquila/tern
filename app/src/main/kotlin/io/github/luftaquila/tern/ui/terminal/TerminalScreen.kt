@@ -125,13 +125,24 @@ private fun TerminalContent(session: TerminalSession, sessions: List<TerminalSes
         }
     }
 
-    /** Opens a non-terminal screen: finish the IME composition and put the keyboard away first. */
-    fun leaveTerminal(route: Route) {
+    /**
+     * Leaves the terminal through [navigate]: the IME composition is finished and the keyboard put
+     * away first, or the keyboard would stay up over the screen shown next.
+     */
+    fun exitTerminal(navigate: () -> Unit) {
         terminalView?.let { v ->
             v.commitImeComposition()
             v.hideKeyboard()
         }
-        navigator.push(route)
+        navigate()
+    }
+
+    /** Opens a non-terminal screen over this one. */
+    fun leaveTerminal(route: Route) = exitTerminal { navigator.push(route) }
+
+    fun closeSession() = exitTerminal {
+        container.sessions.close(session.id)
+        navigator.dropSession(session.id)
     }
 
     val scheme = ColorSchemes.byId(settings.colorSchemeId)
@@ -178,9 +189,9 @@ private fun TerminalContent(session: TerminalSession, sessions: List<TerminalSes
             state = state,
             fg = termFg,
             settings = settings,
-            onBack = { navigator.pop() },
+            onBack = { exitTerminal { navigator.pop() } },
             onSwitch = { navigator.replace(Route.Terminal(it.id)) },
-            onNewConnection = { navigator.popToHome() },
+            onNewConnection = { exitTerminal { navigator.popToHome() } },
             onSftp = { leaveTerminal(Route.Sftp(session.host.id, session.id)) },
             onPaste = { terminalView?.pasteFromClipboard() },
             onFontSize = { delta ->
@@ -191,10 +202,7 @@ private fun TerminalContent(session: TerminalSession, sessions: List<TerminalSes
             onEditExtraKeys = { leaveTerminal(Route.ExtraKeysEditor) },
             onSnippets = { showSnippets = true },
             onReconnect = { session.reconnect() },
-            onClose = {
-                container.sessions.close(session.id)
-                navigator.dropSession(session.id)
-            },
+            onClose = { closeSession() },
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
             AndroidView(
@@ -226,10 +234,7 @@ private fun TerminalContent(session: TerminalSession, sessions: List<TerminalSes
                 DisconnectedBanner(
                     message = ended.message,
                     onReconnect = { session.reconnect() },
-                    onClose = {
-                        container.sessions.close(session.id)
-                        navigator.dropSession(session.id)
-                    },
+                    onClose = { closeSession() },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }
