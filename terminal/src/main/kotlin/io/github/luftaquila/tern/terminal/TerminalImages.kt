@@ -5,9 +5,10 @@
 package io.github.luftaquila.tern.terminal
 
 /**
- * An image shown with the iTerm2 inline image protocol (`OSC 1337 ; File=…:<base64> BEL`).
- * The cells it covers hold [ImageCell] values naming one tile each, so the image scrolls,
- * gets overwritten and erased exactly like text.
+ * An image shown with the iTerm2 inline image protocol (`OSC 1337 ; File=…:<base64> BEL`) or
+ * placed with the kitty graphics protocol. The cells it covers hold [ImageCell] values naming
+ * one tile each, so the image scrolls, gets overwritten and erased exactly like text. A kitty
+ * virtual placement has no tiles ([slot] -1): Unicode placeholder cells show it instead.
  */
 class TerminalImage internal constructor(
     val slot: Int,
@@ -18,6 +19,8 @@ class TerminalImage internal constructor(
     val rows: Int,
     /** Fit inside the area keeping the aspect ratio (true), or stretch to fill it. */
     val preserveAspectRatio: Boolean,
+    /** When fitted, centered in the area (kitty placeholders) rather than at its top left. */
+    val centered: Boolean = false,
 )
 
 /**

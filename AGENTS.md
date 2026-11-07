@@ -54,6 +54,10 @@
 - Glyph coverage of a paint's own font through `hasOwnGlyph`, not `Paint.hasGlyph`
 - Inline images as negative `ImageCell` values per covered cell; text extraction skips them (`ImageCell.isImage`)
 - Image rows drawn across the image's full width while any of the row's cells remains (`TerminalView.drawImages`)
+- kitty graphics (`APC G`, `KittyGraphics.kt`): direct transmission only; placements as `ImageCell` tiles, virtual placements (U=1) only through Unicode placeholders
+- Placeholder cells (`KittyPlaceholder.CODE_POINT`) never drawn as text; `KittyPlaceholder.resolve` gives each cell's image and position, the image fitted and centered in its placement
+- kitty replies only with `i` or `I` in the command; `q` silences them
+- XTVERSION never answered with another terminal's name
 - PTY pixel size: columns × cell width by rows × cell height, no padding; cell size queries unanswered while unknown
 - `TerminalView.onDraw` clipped to its bounds; no `canvas.drawColor`
 - Box drawing, block elements and Powerline glyphs from `BoxDrawing.kt`, not the font
@@ -110,4 +114,5 @@
 - Tests on behavior seen outside the code: screen contents, bytes a program or the server receives, the remote line after IME input, settings after migration
   - No tests pinning internals or timing
 - Passing JVM tests do not verify keyboard behavior; IME changes checked on a device with Gboard
+- kitty placeholders inside tmux checked with tmux `allow-passthrough on` and the `RGB` terminal feature
 - UI text checked on a device for a lone word wrapped onto a second line

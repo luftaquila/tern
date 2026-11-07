@@ -8,6 +8,7 @@ import java.util.WeakHashMap
 import io.github.luftaquila.tern.terminal.TerminalImage
 import io.github.luftaquila.tern.data.AppSettings
 import io.github.luftaquila.tern.terminal.ImageCell
+import io.github.luftaquila.tern.terminal.KittyPlaceholder
 import android.util.LruCache
 import android.graphics.BitmapFactory
 import android.graphics.Bitmap
@@ -383,12 +384,13 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
             }
         }
         drawImages(canvas, em, line, n, top)
+        drawPlaceholders(canvas, em, line, n, top)
         // Text.
         val y = top + baseline
         var c = 0
         while (c < n) {
             val cp = line.getCodePoint(c)
-            if (cp == TerminalRow.WIDE_SPACER || ImageCell.isImage(cp)) { c++; continue }
+            if (cp == TerminalRow.WIDE_SPACER || ImageCell.isImage(cp) || cp == KittyPlaceholder.CODE_POINT) { c++; continue }
             val style = line.getStyle(c)
             val flags = TextStyle.flags(style)
             val wide = c + 1 < n && line.getCodePoint(c + 1) == TerminalRow.WIDE_SPACER
@@ -499,21 +501,63 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
      * so rows join without seams.
      */
     private fun drawImageSlice(canvas: Canvas, image: TerminalImage, y: Int, startCol: Int, top: Float) {
+        val areaLeft = cellX(startCol)
+        drawImagePart(canvas, image, areaLeft, top - y * cellHeight, areaLeft, areaLeft + image.columns * cellWidth, top)
+    }
+
+    /**
+     * kitty Unicode placeholders in a row. Each run of cells that continue one another shows
+     * its part of the virtual placement, so the picture survives redraws by tmux, which only
+     * sees the placeholder characters.
+     */
+    private fun drawPlaceholders(canvas: Canvas, em: TerminalEmulator, line: TerminalRow, n: Int, top: Float) {
+        val cells = KittyPlaceholder.resolve(line, n)
+        var i = 0
+        while (i < cells.size) {
+            val first = cells[i]
+            var j = i + 1
+            while (j < cells.size) {
+                val prev = cells[j - 1]
+                val cur = cells[j]
+                if (cur.column != prev.column + 1 || cur.imageId != first.imageId || cur.placementId != first.placementId ||
+                    cur.imageRow != first.imageRow || cur.imageColumn != prev.imageColumn + 1
+                ) break
+                j++
+            }
+            val image = em.getPlaceholderImage(first.imageId, first.placementId)
+            if (image != null) {
+                val left = cellX(first.column)
+                drawImagePart(canvas, image, left - first.imageColumn * cellWidth, top - first.imageRow * cellHeight, left, cellX(cells[j - 1].column + 1), top)
+            }
+            i = j
+        }
+    }
+
+    /**
+     * [image] fitted into its area of [TerminalImage.columns] × [TerminalImage.rows] cells with
+     * the top left corner at ([areaLeft], [areaTop]), clipped to the row at [top] between
+     * [clipLeft] and [clipRight].
+     */
+    private fun drawImagePart(canvas: Canvas, image: TerminalImage, areaLeft: Float, areaTop: Float, clipLeft: Float, clipRight: Float, top: Float) {
         val bitmap = bitmapFor(image) ?: return
         val areaW = image.columns * cellWidth
         val areaH = image.rows * cellHeight
         var w = areaW
         var h = areaH
+        var dx = 0f
+        var dy = 0f
         if (image.preserveAspectRatio) {
             val scale = min(areaW / bitmap.width, areaH / bitmap.height)
             w = bitmap.width * scale
             h = bitmap.height * scale
+            if (image.centered) {
+                dx = (areaW - w) / 2
+                dy = (areaH - h) / 2
+            }
         }
-        val areaLeft = cellX(startCol)
-        val areaTop = top - y * cellHeight
-        imageRect.set(areaLeft, areaTop, areaLeft + w, areaTop + h)
+        imageRect.set(areaLeft + dx, areaTop + dy, areaLeft + dx + w, areaTop + dy + h)
         canvas.save()
-        canvas.clipRect(areaLeft, top, areaLeft + areaW, top + cellHeight)
+        canvas.clipRect(clipLeft, top, clipRight, top + cellHeight)
         canvas.drawBitmap(bitmap, null, imageRect, imagePaint)
         canvas.restore()
     }

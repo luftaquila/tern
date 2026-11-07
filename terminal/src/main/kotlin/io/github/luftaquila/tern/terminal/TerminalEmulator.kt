@@ -105,6 +105,7 @@ class TerminalEmulator(
     private var intermediate = 0
     private var intermediateCount = 0
     private val stringBuffer = StringBuilder()
+    private var apcOverflow = false
     private var dcsFinal = 0
     private var dcsPrivate = 0
     private var dcsIntermediate = 0
@@ -392,6 +393,10 @@ class TerminalEmulator(
             for (c in from until to) {
                 val cp = row.text[c]
                 if (cp == TerminalRow.WIDE_SPACER) continue
+                if (cp == KittyPlaceholder.CODE_POINT) {
+                    sb.append(' ')
+                    continue
+                }
                 if (cp == 0 || ImageCell.isImage(cp)) sb.append(' ') else sb.appendCodePoint(cp)
                 val comb = row.combining?.get(c)
                 if (comb != null) sb.append(comb)
@@ -549,6 +554,10 @@ class TerminalEmulator(
                     state = GROUND
                     dispatchDcs()
                 }
+                APC_STRING -> {
+                    state = GROUND
+                    dispatchApc()
+                }
             }
             enterEscape()
             return
@@ -568,6 +577,7 @@ class TerminalEmulator(
             DCS_ENTRY, DCS_PARAM -> dcsParam(cp)
             DCS_INTERMEDIATE -> dcsIntermediateState(cp)
             DCS_PASSTHROUGH -> dcsPassthrough(cp)
+            APC_STRING -> apcString(cp)
             DCS_IGNORE, SOS_STRING -> if (cp == ST_C1) state = GROUND
         }
     }
@@ -644,7 +654,12 @@ class TerminalEmulator(
                 clearParams()
                 state = DCS_ENTRY
             }
-            cp == 'X'.code || cp == '^'.code || cp == '_'.code -> state = SOS_STRING
+            cp == '_'.code -> {
+                stringBuffer.setLength(0)
+                apcOverflow = false
+                state = APC_STRING
+            }
+            cp == 'X'.code || cp == '^'.code -> state = SOS_STRING
             cp <= 0x7E -> {
                 state = GROUND
                 escDispatch(cp)
@@ -791,6 +806,24 @@ class TerminalEmulator(
             0x7F -> {}
             else -> if (stringBuffer.length < MAX_DCS_LENGTH) stringBuffer.appendCodePoint(cp)
         }
+    }
+
+    private fun apcString(cp: Int) {
+        when {
+            cp == ST_C1 -> {
+                state = GROUND
+                dispatchApc()
+            }
+            cp < 0x20 || cp == 0x7F -> {}
+            stringBuffer.length < MAX_OSC_LENGTH -> stringBuffer.appendCodePoint(cp)
+            else -> apcOverflow = true
+        }
+    }
+
+    /** APC strings: only kitty graphics commands (`APC G …`) are understood. */
+    private fun dispatchApc() {
+        if (apcOverflow || stringBuffer.isEmpty() || stringBuffer[0] != 'G') return
+        kittyGraphics(KittyCommand.parse(stringBuffer.substring(1)))
     }
 
     private fun dispatchDcs() {
@@ -1509,6 +1542,11 @@ class TerminalEmulator(
         multipartData.setLength(0)
         imagesByHash.clear()
         imageBytes = 0
+        kittyImages.clear()
+        kittyBytes = 0
+        kittyLoad = null
+        kittyData.setLength(0)
+        kittyTiles.clear()
         screen = mainBuffer
         mainBuffer.clearScreen(TextStyle.DEFAULT)
         altBuffer.clearScreen(TextStyle.DEFAULT)
@@ -1909,6 +1947,7 @@ class TerminalEmulator(
         var slot = nextImageSlot
         while (images.containsKey(slot)) slot = (slot + 1) % (ImageCell.MAX_SLOT + 1)
         nextImageSlot = (slot + 1) % (ImageCell.MAX_SLOT + 1)
+        kittyTiles.remove(slot)
         val image = TerminalImage(slot, data, columns, rows, keepAspect)
         images[slot] = image
         imagesByHash.getOrPut(hash) { ArrayList(1) }.add(image)
@@ -1926,6 +1965,7 @@ class TerminalEmulator(
             }
         }
         val gone = images.keys.filter { it !in used }
+        kittyTiles.keys.removeAll(gone.toSet())
         for (slot in gone) {
             val image = images.remove(slot)!!
             imageBytes -= image.data.size
@@ -1966,6 +2006,252 @@ class TerminalEmulator(
             curCol = next
         }
     }
+
+    // ---- kitty graphics protocol ---------------------------------------------------------
+    // https://sw.kovidgoyal.net/kitty/graphics-protocol/ : direct transmission (t=d) of PNG, RGB
+    // and RGBA data (optionally zlib), placements at the cursor as image tiles, virtual
+    // placements for Unicode placeholders, deletion and the query action. No animation, no
+    // file or shared memory transmission, no source rectangles or pixel offsets.
+    private val kittyImages = LinkedHashMap<Long, KittyImage>()
+    private var kittyBytes = 0L
+    private var kittyNextId = KITTY_FIRST_ID - 1
+    private var kittyLoad: KittyCommand? = null
+    private val kittyData = StringBuilder()
+    /** Tile images ([ImageCell] slots) placed by kitty commands, for deletion. */
+    private val kittyTiles = HashMap<Int, KittyTile>()
+
+    /** Image of a kitty virtual placement that placeholder cells show, or null when there is none. */
+    fun getPlaceholderImage(imageId: Long, placementId: Long): TerminalImage? {
+        val image = kittyImages[imageId] ?: return null
+        return if (placementId != 0L) image.placements[placementId] else image.placements.values.firstOrNull()
+    }
+
+    private fun kittyGraphics(cmd: KittyCommand) {
+        val load = kittyLoad
+        if (load != null && cmd.onlyKeys("mq")) {
+            val quiet = if (cmd.has('q')) cmd.int('q').toInt() else load.int('q').toInt()
+            if (kittyData.length + cmd.payload.length > MAX_KITTY_LOAD) {
+                kittyLoad = null
+                kittyData.setLength(0)
+                kittyReply(load.int('i'), load.int('I'), load.int('p'), quiet, "EFBIG:Image data too large")
+                return
+            }
+            kittyData.append(cmd.payload)
+            if (cmd.int('m') == 1L) return
+            kittyLoad = null
+            val data = kittyData.toString()
+            kittyData.setLength(0)
+            kittyTransmit(load, data, quiet)
+            return
+        }
+        kittyLoad = null
+        kittyData.setLength(0)
+        when (cmd.char('a', 't')) {
+            't', 'T', 'q' -> if (cmd.int('m') == 1L) {
+                kittyLoad = cmd
+                kittyData.append(cmd.payload)
+            } else {
+                kittyTransmit(cmd, cmd.payload, cmd.int('q').toInt())
+            }
+            'p' -> kittyPut(cmd)
+            'd' -> kittyDelete(cmd)
+        }
+    }
+
+    private fun kittyTransmit(cmd: KittyCommand, payload: String, quiet: Int) {
+        val action = cmd.char('a', 't')
+        val id = cmd.int('i')
+        val number = cmd.int('I')
+        val placement = cmd.int('p')
+        fun fail(error: String) = kittyReply(id, if (action == 'q') 0 else number, placement, quiet, error)
+        if (id != 0L && number != 0L) return fail("EINVAL:Must not specify both image id and image number")
+        if (action == 'q' && id == 0L) return
+        if (cmd.char('t', 'd') != 'd') return fail("EINVAL:Only direct transmission is supported")
+        var data = try {
+            java.util.Base64.getMimeDecoder().decode(payload)
+        } catch (_: IllegalArgumentException) {
+            return fail("EINVAL:Invalid base64 data")
+        }
+        if (cmd.char('o', ' ') == 'z') data = inflateZlib(data, MAX_KITTY_DECODED) ?: return fail("EINVAL:Invalid zlib data")
+        val png: ByteArray
+        val width: Int
+        val height: Int
+        when (val format = if (cmd.has('f')) cmd.int('f') else 32L) {
+            100L -> {
+                val size = if (isPng(data)) imagePixelSize(data) else null
+                if (size == null || size.first <= 0 || size.second <= 0) return fail("EINVAL:Not a PNG image")
+                png = data
+                width = size.first
+                height = size.second
+            }
+            24L, 32L -> {
+                val channels = if (format == 24L) 3 else 4
+                width = cmd.int('s').coerceAtMost(MAX_KITTY_SIDE).toInt()
+                height = cmd.int('v').coerceAtMost(MAX_KITTY_SIDE).toInt()
+                if (width <= 0 || height <= 0 || width.toLong() * height * channels > data.size) {
+                    return fail("EINVAL:Insufficient image data")
+                }
+                png = encodePng(width, height, channels, data)
+            }
+            else -> return fail("EINVAL:Unsupported image format")
+        }
+        if (action == 'q') return kittyReply(id, 0, 0, quiet, null)
+        val image = KittyImage(if (id != 0L) id else newKittyId(), number, png, width, height)
+        storeKittyImage(image)
+        // An image sent with neither id nor number gets no reply; one with a number learns its id.
+        kittyReply(if (id != 0L || number != 0L) image.id else 0, number, placement, quiet, null)
+        if (action == 'T') kittyPlace(cmd, image)
+    }
+
+    private fun kittyPut(cmd: KittyCommand) {
+        val id = cmd.int('i')
+        val number = cmd.int('I')
+        val placement = cmd.int('p')
+        val quiet = cmd.int('q').toInt()
+        if (id == 0L && number == 0L) return
+        if (id != 0L && number != 0L) return kittyReply(id, number, placement, quiet, "EINVAL:Must not specify both image id and image number")
+        val image = if (id != 0L) kittyImages[id] else kittyImages.values.lastOrNull { it.number == number }
+        if (image == null) return kittyReply(id, number, placement, quiet, "ENOENT:Image not found")
+        kittyPlace(cmd, image)
+        kittyReply(image.id, number, placement, quiet, null)
+    }
+
+    /**
+     * Places [image] at the cursor as tiles, or registers a virtual placement (U=1) for
+     * Unicode placeholders. Sizes left out follow the image's pixel size and aspect ratio.
+     */
+    private fun kittyPlace(cmd: KittyCommand, image: KittyImage) {
+        val cellW = (if (cellPixelWidth > 0) cellPixelWidth else DEFAULT_CELL_PX_W).toLong()
+        val cellH = (if (cellPixelHeight > 0) cellPixelHeight else DEFAULT_CELL_PX_H).toLong()
+        val pw = image.pixelWidth.toLong()
+        val ph = image.pixelHeight.toLong()
+        var columns = cmd.int('c').coerceIn(0, MAX_KITTY_SIDE).toInt()
+        var rows = cmd.int('r').coerceIn(0, MAX_KITTY_SIDE).toInt()
+        if (cmd.int('U') == 1L) {
+            if (columns == 0) columns = ceilDiv(pw, cellW)
+            if (rows == 0) rows = ceilDiv(ph, cellH)
+            val max = KittyPlaceholder.MAX_VALUE + 1
+            image.placements[cmd.int('p')] = TerminalImage(-1, image.data, columns.coerceIn(1, max), rows.coerceIn(1, max), true, centered = true)
+            return
+        }
+        val fill = columns > 0 && rows > 0
+        when {
+            columns == 0 && rows == 0 -> {
+                columns = ceilDiv(pw, cellW)
+                rows = ceilDiv(ph, cellH)
+            }
+            columns == 0 -> columns = ceilDiv(rows * cellH * pw, ph * cellW)
+            rows == 0 -> rows = ceilDiv(columns * cellW * ph, pw * cellH)
+        }
+        columns = columns.coerceIn(1, ImageCell.MAX_SPAN)
+        rows = rows.coerceIn(1, ImageCell.MAX_SPAN)
+        val tiles = storeImage(image.data, columns, rows, keepAspect = !fill)
+        kittyTiles[tiles.slot] = KittyTile(image.id, cmd.int('p'))
+        if (cmd.int('C') == 1L) placeImageKeepingCursor(tiles, columns, rows) else placeImage(tiles, columns, rows)
+    }
+
+    /** Like [placeImage] but leaves the cursor where it is; rows below the screen are cut off. */
+    private fun placeImageKeepingCursor(image: TerminalImage, columns: Int, rows: Int) {
+        val width = minOf(columns, mColumns - curCol)
+        for (y in 0 until minOf(rows, mRows - curRow)) {
+            val row = screen.row(curRow + y)
+            clearWideOverlap(row, curCol, width)
+            for (x in 0 until width) row.setCell(curCol + x, ImageCell.encode(image.slot, x, y), style)
+        }
+    }
+
+    private fun kittyDelete(cmd: KittyCommand) {
+        val what = cmd.char('d', 'a')
+        val free = what.isUpperCase()
+        when (what.lowercaseChar()) {
+            'a' -> deleteKittyTiles(free) { _, _ -> true }
+            'i' -> deleteKittyImage(kittyImages[cmd.int('i')] ?: return, cmd.int('p'), free)
+            'n' -> deleteKittyImage(kittyImages.values.lastOrNull { it.number == cmd.int('I') } ?: return, cmd.int('p'), free)
+            'r' -> {
+                val range = cmd.int('x')..cmd.int('y')
+                for (image in kittyImages.values.filter { it.id in range }) deleteKittyImage(image, 0, free)
+            }
+            'c' -> deleteKittyTiles(free) { r, c -> r == curRow && c == curCol }
+            'p' -> deleteKittyTiles(free) { r, c -> r.toLong() == cmd.int('y') - 1 && c.toLong() == cmd.int('x') - 1 }
+            'x' -> deleteKittyTiles(free) { _, c -> c.toLong() == cmd.int('x') - 1 }
+            'y' -> deleteKittyTiles(free) { r, _ -> r.toLong() == cmd.int('y') - 1 }
+        }
+    }
+
+    /** Removes the kitty tile images with a tile on a screen cell matching [hit]. */
+    private fun deleteKittyTiles(free: Boolean, hit: (row: Int, col: Int) -> Boolean) {
+        val slots = HashSet<Int>()
+        for (r in 0 until mRows) {
+            val text = screen.row(r).text
+            for (c in 0 until mColumns) {
+                val v = text[c]
+                if (ImageCell.isImage(v) && ImageCell.slot(v) in kittyTiles && hit(r, c)) slots += ImageCell.slot(v)
+            }
+        }
+        if (slots.isEmpty()) return
+        clearTiles(slots)
+        if (!free) return
+        for (slot in slots) {
+            val image = kittyImages[kittyTiles[slot]?.imageId ?: continue] ?: continue
+            if (image.placements.isEmpty()) removeKittyImage(image.id)
+        }
+    }
+
+    /** Deletes the placements of [image] (only [placementId] when not 0), and with [free] the image too. */
+    private fun deleteKittyImage(image: KittyImage, placementId: Long, free: Boolean) {
+        if (placementId != 0L) image.placements.remove(placementId) else image.placements.clear()
+        val slots = kittyTiles.filter { (_, t) -> t.imageId == image.id && (placementId == 0L || t.placementId == placementId) }.keys
+        if (slots.isNotEmpty()) clearTiles(slots)
+        if (free && image.placements.isEmpty()) removeKittyImage(image.id)
+    }
+
+    private fun clearTiles(slots: Set<Int>) {
+        for (r in 0 until mRows) {
+            val row = screen.row(r)
+            for (c in 0 until mColumns) {
+                val v = row.text[c]
+                if (ImageCell.isImage(v) && ImageCell.slot(v) in slots) row.setCell(c, 0, row.styles[c])
+            }
+        }
+    }
+
+    private fun storeKittyImage(image: KittyImage) {
+        removeKittyImage(image.id)
+        kittyImages[image.id] = image
+        kittyBytes += image.data.size
+        val oldest = kittyImages.values.iterator()
+        while (kittyBytes > MAX_KITTY_BYTES && kittyImages.size > 1) {
+            val victim = oldest.next()
+            oldest.remove()
+            kittyBytes -= victim.data.size
+        }
+    }
+
+    private fun removeKittyImage(id: Long) {
+        kittyImages.remove(id)?.let { kittyBytes -= it.data.size }
+    }
+
+    private fun newKittyId(): Long {
+        do {
+            kittyNextId = if (kittyNextId >= 0xFFFFFFFFL) KITTY_FIRST_ID else kittyNextId + 1
+        } while (kittyImages.containsKey(kittyNextId))
+        return kittyNextId
+    }
+
+    /** `APC G i=…,I=…,p=…;OK|ERROR:message ST`, unless there is no id or [quiet] silences it. */
+    private fun kittyReply(id: Long, number: Long, placement: Long, quiet: Int, error: String?) {
+        if (id == 0L && number == 0L) return
+        if (quiet >= 2 || (error == null && quiet >= 1)) return
+        val sb = StringBuilder("\u001b_G")
+        if (id != 0L) sb.append("i=").append(id)
+        if (number != 0L) sb.append(if (id != 0L) ",I=" else "I=").append(number)
+        if (placement != 0L) sb.append(",p=").append(placement)
+        sb.append(';').append(error ?: "OK").append("\u001b\\")
+        reply(sb.toString())
+    }
+
+    private fun isPng(data: ByteArray): Boolean =
+        data.size >= 8 && data[0] == 0x89.toByte() && data[1] == 'P'.code.toByte() && data[2] == 'N'.code.toByte() && data[3] == 'G'.code.toByte()
 
     private fun oscWorkingDirectory(pt: String) {
         if (!pt.startsWith("file://")) return
@@ -2031,6 +2317,15 @@ class TerminalEmulator(
         /** Bounds for inline images kept alive; unreferenced ones are dropped first. */
         private const val MAX_IMAGES = 256
         private const val MAX_IMAGE_BYTES = 32L shl 20
+
+        /** kitty graphics: base64 text of one chunked upload, decoded size, kept image data, pixel or cell extent. */
+        private const val MAX_KITTY_LOAD = 1 shl 24
+        private const val MAX_KITTY_DECODED = 1 shl 25
+        private const val MAX_KITTY_BYTES = 32L shl 20
+        private const val MAX_KITTY_SIDE = 10000L
+
+        /** Ids the terminal assigns to images sent with only a number (I=). */
+        private const val KITTY_FIRST_ID = 0x40000000L
         private const val DEFAULT_CELL_PX_W = 10
         private const val DEFAULT_CELL_PX_H = 20
         private const val MAX_DCS_LENGTH = 4096
@@ -2054,6 +2349,7 @@ class TerminalEmulator(
         private const val DCS_PASSTHROUGH = 11
         private const val DCS_IGNORE = 12
         private const val SOS_STRING = 13
+        private const val APC_STRING = 14
 
         private const val CHARSET_ASCII = 0
         private const val CHARSET_DEC_GRAPHICS = 1
