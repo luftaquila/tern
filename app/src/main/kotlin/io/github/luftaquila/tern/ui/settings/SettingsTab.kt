@@ -43,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -62,6 +63,8 @@ import io.github.luftaquila.tern.terminal.ColorSchemes
 import io.github.luftaquila.tern.ui.LocalContainer
 import io.github.luftaquila.tern.ui.LocalNavigator
 import io.github.luftaquila.tern.ui.Route
+import io.github.luftaquila.tern.ui.backup.ExportFlow
+import io.github.luftaquila.tern.ui.backup.ImportFlow
 import io.github.luftaquila.tern.ui.theme.MonoFamily
 import kotlin.math.roundToInt
 
@@ -71,6 +74,8 @@ fun SettingsTab(modifier: Modifier = Modifier) {
     val navigator = LocalNavigator.current
     val context = LocalContext.current
     val settings by container.settings.settings.collectAsStateWithLifecycle()
+    var exporting by remember { mutableStateOf(false) }
+    var importing by remember { mutableStateOf(false) }
     fun update(transform: (AppSettings) -> AppSettings) = container.settings.update(transform)
     Column(
         modifier
@@ -174,6 +179,11 @@ fun SettingsTab(modifier: Modifier = Modifier) {
             }
         }
 
+        SettingsSection(stringResource(R.string.backup_section)) {
+            NavRow(stringResource(R.string.backup_export), stringResource(R.string.backup_export_row)) { exporting = true }
+            NavRow(stringResource(R.string.backup_import), stringResource(R.string.backup_import_row)) { importing = true }
+        }
+
         SettingsSection(stringResource(R.string.donate_section)) {
             NavRow(stringResource(R.string.donate_title), stringResource(R.string.donate_summary)) { navigator.push(Route.Donate) }
         }
@@ -187,6 +197,8 @@ fun SettingsTab(modifier: Modifier = Modifier) {
         }
         Spacer(Modifier.height(24.dp))
     }
+    if (exporting) ExportFlow { exporting = false }
+    if (importing) ImportFlow { importing = false }
 }
 
 @Composable

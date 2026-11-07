@@ -408,4 +408,31 @@
     <string name="keys_export_action">Export</string>
     <string name="keys_export_done">Private key saved</string>
     <string name="keys_export_failed">Could not save the file</string>
+    <string name="backup_section">Backup</string>
+    <string name="backup_export">Export</string>
+    <string name="backup_export_row">Save hosts and snippets to a file</string>
+    <string name="backup_import">Import</string>
+    <string name="backup_import_row">Load hosts and snippets from an exported file</string>
+    <string name="backup_import_from_file">Import from a file</string>
+    <string name="backup_export_desc">Saves your hosts and snippets in one file.</string>
+    <string name="backup_include_secrets">Include passwords and private keys</string>
+    <string name="backup_password">File password</string>
+    <string name="backup_password_confirm">Confirm password</string>
+    <string name="backup_password_mismatch">The passwords do not match</string>
+    <string name="backup_password_note">Without this password, the passwords and keys in the file cannot be imported.</string>
+    <string name="backup_without_secrets">Saved passwords and private keys are left out.</string>
+    <string name="backup_export_done">File saved</string>
+    <string name="backup_read_failed">This file cannot be imported</string>
+    <string name="backup_import_contents">The file has %1$s and %2$s. Hosts and snippets already here are replaced with the file\'s.</string>
+    <plurals name="backup_hosts">
+        <item quantity="one">%d host</item>
+        <item quantity="other">%d hosts</item>
+    </plurals>
+    <plurals name="backup_snippets">
+        <item quantity="one">%d snippet</item>
+        <item quantity="other">%d snippets</item>
+    </plurals>
+    <string name="backup_import_secrets">It also has passwords and private keys. Enter the file password to import them too, or leave it empty to skip them.</string>
+    <string name="backup_wrong_password">Wrong password</string>
+    <string name="backup_import_done">Import complete</string>
 </resources>

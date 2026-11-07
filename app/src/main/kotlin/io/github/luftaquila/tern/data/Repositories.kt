@@ -21,6 +21,12 @@ class HostRepository(dir: File, scope: CoroutineScope) {
         if (list.any { it.id == host.id }) list.map { if (it.id == host.id) host else it } else list + host
     }
 
+    /** Replaces the hosts with the same ids, adds the others. */
+    fun upsertAll(hosts: List<Host>) = store.update { list ->
+        val byId = hosts.associateBy { it.id }
+        list.map { byId[it.id] ?: it } + hosts.filter { new -> list.none { it.id == new.id } }
+    }
+
     /** Hosts that went through the deleted one connect directly afterwards. */
     fun delete(id: String) = store.update { list ->
         list.filterNot { it.id == id }.map { if (it.jumpHostId == id) it.copy(jumpHostId = null) else it }
@@ -49,6 +55,13 @@ class KeyRepository(dir: File, scope: CoroutineScope) {
     fun get(id: String): SshKeyEntry? = store.value.firstOrNull { it.id == id }
 
     fun add(key: SshKeyEntry) = store.update { it + key }
+
+    /** Adds [keys] and waits until they are saved. */
+    fun addAll(keys: List<SshKeyEntry>) {
+        if (keys.isEmpty()) return
+        store.update { it + keys }
+        store.flush()
+    }
 
     fun rename(id: String, name: String) = store.update { list ->
         list.map { if (it.id == id) it.copy(name = name) else it }

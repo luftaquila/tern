@@ -1,7 +1,7 @@
 # AGENTS.md
 
 - Android SSH and SFTP terminal with IME composition input: a JVM terminal emulator, an SSH layer on sshj and a Compose app
-- Locations: emulator `terminal`, SSH and SFTP `ssh`, app `app` (IME `input`, terminal view `termview`, sessions `session`, stores `data`, billing `billing`, app lock `ui/lock`, extra keys `ui/terminal/ExtraKeysBar.kt`, snippets `ui/snippets`), table generators `terminal/tools/gen_wcwidth.py` and `app/tools/gen_nerd_font_coverage.py`
+- Locations: emulator `terminal`, SSH and SFTP `ssh`, app `app` (IME `input`, terminal view `termview`, sessions `session`, stores `data`, billing `billing`, app lock `ui/lock`, extra keys `ui/terminal/ExtraKeysBar.kt`, snippets `ui/snippets`, export and import `data/Backup.kt`), table generators `terminal/tools/gen_wcwidth.py` and `app/tools/gen_nerd_font_coverage.py`
 
 ## AGENTS.md writing rules
 - Terse bullets, noun phrases, no ambiguous wording
@@ -77,6 +77,13 @@
 ## Hosts
 - One group per host (`Host.group`), groups differing only in case shown as one
 - Tag field splitting comma-separated tags only when they are added, never while typing
+
+## Backup
+- Export file `BackupFile`: hosts and snippets readable; keys and saved passwords only in `BackupFile.secrets`, sealed with the export password (`Backup.seal`)
+- No `SecretBox` ciphertext in an export file
+- Export only after `ConfirmLock` when the app lock is on
+- Import (`Backup.merge`): hosts and snippets with an existing id replaced, others added; keys matched by fingerprint; a host without a password in the file keeps its saved one
+- Settings, known hosts and the extra-keys layout not exported
 
 ## Billing
 - Donations only (`Products.DONATIONS`), each consumed once paid

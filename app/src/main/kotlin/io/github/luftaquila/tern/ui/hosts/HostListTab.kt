@@ -82,6 +82,7 @@ import io.github.luftaquila.tern.ui.LocalContainer
 import io.github.luftaquila.tern.ui.LocalNavigator
 import io.github.luftaquila.tern.ui.LocalRequestNotificationPermission
 import io.github.luftaquila.tern.ui.Route
+import io.github.luftaquila.tern.ui.backup.ImportFlow
 import io.github.luftaquila.tern.ui.theme.HostColors
 import io.github.luftaquila.tern.ui.theme.MonoFamily
 
@@ -96,6 +97,7 @@ fun HostListTab(modifier: Modifier = Modifier) {
     var query by rememberSaveable { mutableStateOf("") }
     var tagFilter by rememberSaveable { mutableStateOf<String?>(null) }
     var pendingDelete by remember { mutableStateOf<Host?>(null) }
+    var importing by remember { mutableStateOf(false) }
 
     val allTags = remember(hosts) { hosts.tagNames() }
     // A filter tag no host has any more filters nothing.
@@ -243,7 +245,7 @@ fun HostListTab(modifier: Modifier = Modifier) {
                 }
             }
             if (hosts.isEmpty()) {
-                item { EmptyHosts(onAdd = { navigator.push(Route.HostEditor(null)) }) }
+                item { EmptyHosts(onAdd = { navigator.push(Route.HostEditor(null)) }, onImport = { importing = true }) }
             }
         }
         if (hosts.isNotEmpty()) {
@@ -257,6 +259,8 @@ fun HostListTab(modifier: Modifier = Modifier) {
             )
         }
     }
+
+    if (importing) ImportFlow { importing = false }
 
     pendingDelete?.let { host ->
         AlertDialog(
@@ -480,7 +484,7 @@ private fun SessionChip(session: TerminalSession, onOpen: () -> Unit, onClose: (
 }
 
 @Composable
-private fun EmptyHosts(onAdd: () -> Unit) {
+private fun EmptyHosts(onAdd: () -> Unit, onImport: () -> Unit) {
     Column(
         Modifier.fillMaxWidth().padding(top = 64.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -507,5 +511,6 @@ private fun EmptyHosts(onAdd: () -> Unit) {
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.action_add_host))
         }
+        TextButton(onClick = onImport) { Text(stringResource(R.string.backup_import_from_file)) }
     }
 }

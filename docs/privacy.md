@@ -15,7 +15,8 @@ Tern(이하 "앱")은 개인정보를 수집하지 않음
 - 호스트 설정, 스니펫, 비밀번호, 개인 키, 앱 설정은 이 기기에만 저장
 - 비밀번호와 개인 키는 Android Keystore의 키로 암호화
 - Android 백업과 기기 간 전송에서 제외, 앱을 삭제하면 함께 삭제
-- 내보낸 개인 키는 사용자가 고른 위치에 파일로 저장. 앱이 관리하거나 다른 곳으로 보내지 않음
+- 내보낸 파일(개인 키, 호스트와 스니펫)은 사용자가 고른 위치에 저장. 앱이 관리하거나 다른 곳으로 보내지 않음
+- 호스트 내보내기 파일에는 사용자가 정한 암호로 암호화한 경우에만 비밀번호와 개인 키 포함
 
 **네트워크 연결**
 - 사용자가 입력한 서버에만 SSH와 SFTP로 연결
@@ -60,7 +61,8 @@ Tern ("the app") collects no personal data.
 - Hosts, snippets, passwords, private keys and settings stored only on this device
 - Passwords and private keys encrypted with a key in the Android Keystore
 - Excluded from Android backups and device transfers; removed when the app is uninstalled
-- Exported private keys saved as files where you choose; the app does not manage them or send them anywhere
+- Exported files (private keys, hosts and snippets) saved where you choose; the app does not manage them or send them anywhere
+- Host export files hold passwords and private keys only when encrypted with a password you set
 
 **Network connections**
 - Only the servers you enter, over SSH and SFTP

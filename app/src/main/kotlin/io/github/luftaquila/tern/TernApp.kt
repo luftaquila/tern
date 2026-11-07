@@ -38,6 +38,7 @@ class AppContainer(val context: Context) {
     val knownHosts = KnownHostRepository(context.filesDir, scope)
     val settings = SettingsRepository(context.filesDir, scope)
     val snippets = SnippetRepository(context.filesDir, scope)
+    val backups = io.github.luftaquila.tern.data.Backups(hosts, keys, snippets)
     val sessions = SessionManager(this)
     val lock = io.github.luftaquila.tern.ui.lock.AppLock(settings)
     val purchases = io.github.luftaquila.tern.billing.Purchases(context)
