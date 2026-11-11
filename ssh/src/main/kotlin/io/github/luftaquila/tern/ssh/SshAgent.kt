@@ -28,10 +28,16 @@ import java.util.Base64
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * A key offered through agent forwarding: its authorized_keys line, the name programs see, and
- * its private key, read only when the server first asks for a signature with it.
+ * A key offered through agent forwarding: its authorized_keys line, the name programs see, its
+ * OpenSSH certificate (offered too, before the key), and its private key, read only when the server
+ * first asks for a signature with it.
  */
-class AgentKey(val publicKey: String, val name: String, val privateKey: () -> SshCredential.PrivateKey)
+class AgentKey(
+    val publicKey: String,
+    val name: String,
+    val certificate: String? = null,
+    val privateKey: () -> SshCredential.PrivateKey,
+)
 
 /**
  * Agent forwarding (`ssh -A`): programs on the server (ssh, git) ask this app to sign with
@@ -43,18 +49,20 @@ class SshAgent(keys: List<AgentKey>, private val interaction: SshInteraction) {
 
     private class Identity(val blob: ByteArray, val key: AgentKey)
 
-    private val identities: List<Identity> = keys.mapNotNull { key ->
-        val blob = key.publicKey.trim().split(Regex("\\s+")).getOrNull(1)?.let {
-            try {
-                Base64.getDecoder().decode(it)
-            } catch (_: IllegalArgumentException) {
-                null
+    private val identities: List<Identity> = keys.flatMap { key ->
+        listOfNotNull(key.certificate, key.publicKey).mapNotNull { line ->
+            val blob = line.trim().split(Regex("\\s+")).getOrNull(1)?.let {
+                try {
+                    Base64.getDecoder().decode(it)
+                } catch (_: IllegalArgumentException) {
+                    null
+                }
             }
+            blob?.let { Identity(it, key) }
         }
-        blob?.let { Identity(it, key) }
     }
 
-    private val loaded = ConcurrentHashMap<Identity, KeyPair>()
+    private val loaded = ConcurrentHashMap<AgentKey, KeyPair>()
     private val loading = Any()
 
     /** Answers agent requests on one channel until the server closes it. */
@@ -114,17 +122,20 @@ class SshAgent(keys: List<AgentKey>, private val interaction: SshInteraction) {
         return SshWriter().byte(SIGN_RESPONSE).bytes(signatureBlob).toByteArray()
     }
 
-    /** One passphrase question at a time; a key the user skipped is asked for again next time. */
+    /**
+     * One passphrase question at a time; a key the user skipped is asked for again next time. A key
+     * and its certificate share the loaded key.
+     */
     private fun keyPair(identity: Identity): KeyPair? {
-        loaded[identity]?.let { return it }
+        loaded[identity.key]?.let { return it }
         synchronized(loading) {
-            loaded[identity]?.let { return it }
+            loaded[identity.key]?.let { return it }
             val pair = try {
                 runBlocking { loadPrivateKey(identity.key.privateKey(), interaction) }
             } catch (_: Exception) {
                 null // unreadable key, or the app could not decrypt it
             } ?: return null
-            loaded[identity] = pair
+            loaded[identity.key] = pair
             return pair
         }
     }

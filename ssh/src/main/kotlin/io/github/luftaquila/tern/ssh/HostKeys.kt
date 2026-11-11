@@ -4,6 +4,7 @@
 
 package io.github.luftaquila.tern.ssh
 
+import com.hierynomus.sshj.userauth.certificate.Certificate
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
 import net.schmizz.sshj.common.KeyType
@@ -35,7 +36,10 @@ internal object HostKeys {
 
 /**
  * Verifies server host keys against a [KnownHostsStore], asking the user through
- * [SshInteraction.confirmHostKey] for unknown or changed keys and saving accepted ones.
+ * [SshInteraction.confirmHostKey] for unknown or changed keys and saving accepted ones. A host
+ * certificate signed by one of [authorities] needs no confirmation and is not saved; its
+ * signature, validity and principals are checked during the key exchange
+ * (`Config.isVerifyHostKeyCertificates`).
  *
  * [verify] runs on sshj's transport reader thread in the middle of the key exchange, so the
  * connector raises the transport timeout while connecting (see [Connector]).
@@ -46,6 +50,8 @@ internal class StoreHostKeyVerifier(
     private val store: KnownHostsStore,
     private val interaction: SshInteraction,
     private val bridge: CallbackBridge,
+    /** Public key blobs of the CAs trusted for this host ([trustedAuthorities]). */
+    private val authorities: List<ByteArray> = emptyList(),
 ) : HostKeyVerifier {
 
     /** True once the user (or a failed prompt) rejected a key. */
@@ -59,6 +65,16 @@ internal class StoreHostKeyVerifier(
         private set
 
     override fun verify(hostname: String, port: Int, key: PublicKey): Boolean {
+        if (key !is Certificate<*>) return verifyKey(key)
+        if (key.type == Certified.HOST_CERTIFICATE && authorities.any { it.contentEquals(key.signatureKey) }) {
+            verified = HostKeys.info(host, this.port, key.key)
+            return true
+        }
+        // Signed by a CA not trusted for this host: judged like the plain key it certifies.
+        return verifyKey(key.key)
+    }
+
+    private fun verifyKey(key: PublicKey): Boolean {
         val info = HostKeys.info(host, this.port, key)
         val known = store.find(host, this.port)
         if (known.any { it.keyType == info.keyType && it.publicKeyBase64 == info.publicKeyBase64 }) {
@@ -84,7 +100,20 @@ internal class StoreHostKeyVerifier(
         return true
     }
 
-    /** Key types already trusted for this host, so the KEX negotiates a key we know. */
-    override fun findExistingAlgorithms(hostname: String, port: Int): List<String> =
-        store.find(host, this.port).map { it.keyType }.distinct()
+    /**
+     * Key types already trusted for this host, so the KEX negotiates a key we know; with a trusted
+     * CA, certificate types first (the config lists them first too, see [TernSshConfig.preferCertificateHostKeys]).
+     */
+    override fun findExistingAlgorithms(hostname: String, port: Int): List<String> {
+        val known = store.find(host, this.port).map { it.keyType }.distinct()
+        return if (authorities.isEmpty()) known else Certified.KEY_TYPES.map { it.toString() } + known
+    }
+
+    companion object {
+        /** Public key blobs of the CAs in [store] trusted for [host] on [port]; unreadable keys are left out. */
+        fun trustedAuthorities(store: KnownHostsStore, host: String, port: Int): List<ByteArray> =
+            store.certificateAuthorities()
+                .filter { HostPatterns.matches(it.hostPatterns, host, port) }
+                .mapNotNull { runCatching { Certified.blob(it.publicKey) }.getOrNull() }
+    }
 }

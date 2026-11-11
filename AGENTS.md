@@ -25,7 +25,12 @@
 - Forwards from `SshConnection.forwardLocal/forwardRemote/forwardDynamic`, closed with their connection
   - Device-side listeners on 127.0.0.1 only
 - Jump hosts: `connect(..., via = jump)` through `jump`'s direct-tcpip channel; the jump connection closed with the target, or at once when connecting fails
-- Agent forwarding: one `AgentChannelOpener` per connection from `openShell(..., agent)`; each private key loaded on its first sign request (`loadPrivateKey`)
+- Agent forwarding: one `AgentChannelOpener` per connection from `openShell(..., agent)`; each private key loaded on its first sign request (`loadPrivateKey`); a key's certificate listed before the key
+- User certificates (`SshCredential.PrivateKey.certificate`) offered before the plain key (`CertifiedKey`); a certificate of another key never sent
+- Host certificates trusted only from `KnownHostsStore.certificateAuthorities` whose patterns cover the host (`HostPatterns`)
+  - Certificate host key algorithms preferred only for such hosts (`TernSshConfig.preferCertificateHostKeys`, `StoreHostKeyVerifier.findExistingAlgorithms`)
+  - A host certificate of another CA judged by its plain key; certified host keys not saved to known hosts
+- RSA certificates through the `rsa-sha2-512/256-cert-v01` key algorithms of `TernSshConfig`
 - Post-quantum key exchange in `ssh/PostQuantumKex.kt` on sshj's `KeyExchangeBase`; shared secret as `RawSecret`
 - Terminal sessions and SFTP connected only through `session/HostConnector` (jump chain, stored credentials, remembered passwords per hop, agent keys)
 - `SessionService`: special-use foreground service while any session is open
@@ -84,7 +89,7 @@
 - No `SecretBox` ciphertext in an export file
 - Export only after `ConfirmLock` when the app lock is on
 - Import (`Backup.merge`): hosts and snippets with an existing id replaced, others added; keys matched by fingerprint; a host without a password in the file keeps its saved one
-- Settings, known hosts and the extra-keys layout not exported
+- Settings, known hosts, trusted CAs and the extra-keys layout not exported
 
 ## Billing
 - Donations only (`Products.DONATIONS`), each consumed once paid

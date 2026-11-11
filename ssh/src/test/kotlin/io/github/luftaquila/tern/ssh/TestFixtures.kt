@@ -67,10 +67,12 @@ fun opensshKeyId(key: PublicKey): String = PublicKeyEntry.toString(key).split(' 
 
 fun keyId(authorizedKeysLine: String): String = authorizedKeysLine.trim().split(' ').take(2).joinToString(" ")
 
-class InMemoryKnownHosts : KnownHostsStore {
+class InMemoryKnownHosts(private val authorities: List<HostCertificateAuthority> = emptyList()) : KnownHostsStore {
     val entries = CopyOnWriteArrayList<KnownHost>()
 
     override fun find(host: String, port: Int): List<KnownHost> = entries.filter { it.host == host && it.port == port }
+
+    override fun certificateAuthorities(): List<HostCertificateAuthority> = authorities
 
     override fun save(entry: KnownHost) {
         entries.removeIf { it.host == entry.host && it.port == entry.port && it.keyType == entry.keyType }

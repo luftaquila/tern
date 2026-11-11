@@ -47,10 +47,16 @@ internal object Connector {
         // caller's (possibly main) thread.
         SshSecurity.install()
         val timeouts = timeouts
-        val client = SSHClient(TernSshConfig().apply { if (options.postQuantumKex) preferPostQuantum() })
+        val authorities = StoreHostKeyVerifier.trustedAuthorities(knownHosts, target.host, target.port)
+        val client = SSHClient(
+            TernSshConfig().apply {
+                if (options.postQuantumKex) preferPostQuantum()
+                if (authorities.isNotEmpty()) preferCertificateHostKeys()
+            },
+        )
         coroutineScope {
             val bridge = CallbackBridge(coroutineContext.job)
-            val verifier = StoreHostKeyVerifier(target.host, target.port, knownHosts, interaction, bridge)
+            val verifier = StoreHostKeyVerifier(target.host, target.port, knownHosts, interaction, bridge, authorities)
             client.addHostKeyVerifier(verifier)
             client.connectTimeout = options.connectTimeoutMillis
             client.transport.timeoutMs = timeouts.interactiveMillis

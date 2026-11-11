@@ -20,7 +20,10 @@ class BackupTest {
     )
     private val bastion = Host(id = "bastion", hostname = "bastion.example.com", username = "me")
     private val snippet = Snippet("s1", "gs", "git status\r")
-    private val key = BackupKey("k1", "laptop", "ssh-ed25519", "AAAA", "SHA256:abc", "-----BEGIN OPENSSH PRIVATE KEY-----", "pass", 5)
+    private val key = BackupKey(
+        "k1", "laptop", "ssh-ed25519", "AAAA", "SHA256:abc", "-----BEGIN OPENSSH PRIVATE KEY-----",
+        passphrase = "pass", certificate = "ssh-ed25519-cert-v01@openssh.com AAAB", createdAt = 5,
+    )
     private val protect: (String) -> String = { "sealed($it)" }
 
     @Test
@@ -79,6 +82,7 @@ class BackupTest {
         assertEquals("k1", added.id)
         assertEquals("sealed(-----BEGIN OPENSSH PRIVATE KEY-----)", added.encryptedPrivateKey)
         assertEquals("sealed(pass)", added.encryptedPassphrase)
+        assertEquals("ssh-ed25519-cert-v01@openssh.com AAAB", added.certificate, "the certificate comes along")
         val imported = changes.hosts.first { it.id == "web" }
         assertEquals("sealed(hunter2)", imported.encryptedPassword)
         assertEquals("k1", imported.keyId)

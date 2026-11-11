@@ -55,6 +55,7 @@ data class BackupKey(
     val fingerprint: String,
     val privateKey: String,
     val passphrase: String? = null,
+    val certificate: String? = null,
     val createdAt: Long = 0,
 )
 
@@ -183,6 +184,7 @@ object Backup {
                 fingerprint = k.fingerprint,
                 encryptedPrivateKey = protect(k.privateKey),
                 encryptedPassphrase = k.passphrase?.let(protect),
+                certificate = k.certificate,
                 createdAt = k.createdAt,
             )
             keyIds[k.id] = id
@@ -231,7 +233,10 @@ class Backups(private val hosts: HostRepository, private val keys: KeyRepository
                 passwords = hostList.mapNotNull { h -> SecretBox.decryptOrNull(h.encryptedPassword)?.let { h.id to it } }.toMap(),
                 keys = keys.keys.value.mapNotNull { k ->
                     val privateKey = SecretBox.decryptOrNull(k.encryptedPrivateKey) ?: return@mapNotNull null
-                    BackupKey(k.id, k.name, k.keyType, k.publicKey, k.fingerprint, privateKey, SecretBox.decryptOrNull(k.encryptedPassphrase), k.createdAt)
+                    BackupKey(
+                        k.id, k.name, k.keyType, k.publicKey, k.fingerprint, privateKey,
+                        SecretBox.decryptOrNull(k.encryptedPassphrase), k.certificate, k.createdAt,
+                    )
                 },
             )
         }

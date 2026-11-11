@@ -225,6 +225,9 @@ class TerminalSession(
                     context.getString(R.string.status_connecting_via, where, via.displayName)
                 }
                 printStatus(text + "\r\n")
+                connector.keyWithInvalidCertificate(hop)?.let { key ->
+                    printStatus(context.getString(R.string.status_certificate_invalid, key) + "\r\n")
+                }
             }
             container.hosts.get(host.id)?.let { host = it } // picks up a password saved while connecting
             if (closed) {

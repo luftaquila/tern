@@ -94,7 +94,20 @@ data class SshKeyEntry(
     val encryptedPrivateKey: String,
     /** Optional stored passphrase, encrypted with [SecretBox]. */
     val encryptedPassphrase: String? = null,
+    /** OpenSSH certificate of the key ("<type>-cert-v01@openssh.com <base64>"), offered before the plain key. */
+    val certificate: String? = null,
     val createdAt: Long = System.currentTimeMillis(),
+)
+
+/** A CA trusted for the host certificates of the hosts matching [hostPatterns] (OpenSSH `@cert-authority`). */
+@Serializable
+data class HostCaEntry(
+    val id: String = UUID.randomUUID().toString(),
+    /** The CA's public key line: "<type> <base64> [comment]". */
+    val publicKey: String,
+    /** Comma-separated host patterns with `*` and `?` wildcards and `!` exclusions. */
+    val hostPatterns: String,
+    val addedAt: Long = System.currentTimeMillis(),
 )
 
 @Serializable

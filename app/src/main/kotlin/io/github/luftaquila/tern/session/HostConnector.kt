@@ -12,7 +12,10 @@ import io.github.luftaquila.tern.data.HostRepository
 import io.github.luftaquila.tern.data.SecretBox
 import io.github.luftaquila.tern.ssh.AgentKey
 import io.github.luftaquila.tern.ssh.ConnectOptions
+import io.github.luftaquila.tern.ssh.HostCertificateAuthority
+import io.github.luftaquila.tern.ssh.KnownHostsStore
 import io.github.luftaquila.tern.ssh.SshAgent
+import io.github.luftaquila.tern.ssh.SshCertificates
 import io.github.luftaquila.tern.ssh.SshConnection
 import io.github.luftaquila.tern.ssh.SshCredential
 import io.github.luftaquila.tern.ssh.SshTarget
@@ -22,6 +25,11 @@ import io.github.luftaquila.tern.ssh.SshTarget
  * jump hosts. Passwords the user asks to remember are saved to the host they belong to.
  */
 class HostConnector(private val container: AppContainer, private val prompts: PromptBridge) {
+
+    /** Known host keys and the trusted host CAs. */
+    private val trust = object : KnownHostsStore by container.knownHosts {
+        override fun certificateAuthorities(): List<HostCertificateAuthority> = container.hostCas.authorities()
+    }
 
     /**
      * Connects to [host], first to each of its jump hosts. [onHop] is told about every host before
@@ -37,7 +45,7 @@ class HostConnector(private val container: AppContainer, private val prompts: Pr
                 via = SshConnection.connect(
                     target = SshTarget(hop.hostname, hop.port, hop.username),
                     credentials = credentials(hop),
-                    knownHosts = container.knownHosts,
+                    knownHosts = trust,
                     interaction = prompts,
                     options = ConnectOptions(
                         keepAliveIntervalSeconds = hop.keepAliveSeconds,
@@ -60,7 +68,7 @@ class HostConnector(private val container: AppContainer, private val prompts: Pr
     /** Every key of the app, offered to the server for agent forwarding. */
     fun agent(): SshAgent = SshAgent(
         container.keys.keys.value.map { key ->
-            AgentKey(key.publicKey, key.name) {
+            AgentKey(key.publicKey, key.name, key.certificate) {
                 SshCredential.PrivateKey(key.name, SecretBox.decrypt(key.encryptedPrivateKey), SecretBox.decryptOrNull(key.encryptedPassphrase))
             }
         },
@@ -70,10 +78,25 @@ class HostConnector(private val container: AppContainer, private val prompts: Pr
     private fun credentials(host: Host): List<SshCredential> = buildList {
         if (host.authMethod == AuthMethod.KEY) {
             host.keyId?.let { container.keys.get(it) }?.let { key ->
-                add(SshCredential.PrivateKey(key.name, SecretBox.decrypt(key.encryptedPrivateKey), SecretBox.decryptOrNull(key.encryptedPassphrase)))
+                add(
+                    SshCredential.PrivateKey(
+                        key.name,
+                        SecretBox.decrypt(key.encryptedPrivateKey),
+                        SecretBox.decryptOrNull(key.encryptedPassphrase),
+                        key.certificate,
+                    ),
+                )
             }
         }
         SecretBox.decryptOrNull(host.encryptedPassword)?.let { add(SshCredential.Password(it)) }
+    }
+
+    /** The name of [host]'s key when the key's certificate is not valid now (expired or not yet valid), else null. */
+    fun keyWithInvalidCertificate(host: Host): String? {
+        if (host.authMethod != AuthMethod.KEY) return null
+        val key = host.keyId?.let { container.keys.get(it) } ?: return null
+        val info = key.certificate?.let { runCatching { SshCertificates.inspect(it) }.getOrNull() } ?: return null
+        return key.name.takeUnless { info.isValidAt(System.currentTimeMillis()) }
     }
 
     companion object {

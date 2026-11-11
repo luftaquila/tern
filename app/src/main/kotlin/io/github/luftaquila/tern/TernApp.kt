@@ -36,6 +36,7 @@ class AppContainer(val context: Context) {
     val hosts = HostRepository(context.filesDir, scope)
     val keys = KeyRepository(context.filesDir, scope)
     val knownHosts = KnownHostRepository(context.filesDir, scope)
+    val hostCas = io.github.luftaquila.tern.data.HostCaRepository(context.filesDir, scope)
     val settings = SettingsRepository(context.filesDir, scope)
     val snippets = SnippetRepository(context.filesDir, scope)
     val backups = io.github.luftaquila.tern.data.Backups(hosts, keys, snippets)

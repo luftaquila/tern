@@ -4,6 +4,7 @@
 
 package io.github.luftaquila.tern.data
 
+import io.github.luftaquila.tern.ssh.HostCertificateAuthority
 import io.github.luftaquila.tern.ssh.KnownHost
 import io.github.luftaquila.tern.ssh.KnownHostsStore
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +68,10 @@ class KeyRepository(dir: File, scope: CoroutineScope) {
         list.map { if (it.id == id) it.copy(name = name) else it }
     }
 
+    fun setCertificate(id: String, certificate: String?) = store.update { list ->
+        list.map { if (it.id == id) it.copy(certificate = certificate) else it }
+    }
+
     fun delete(id: String) = store.update { list -> list.filterNot { it.id == id } }
 
     /** Rewrites every private key and passphrase with [transform] and waits until they are saved. */
@@ -96,6 +101,20 @@ class KnownHostRepository(dir: File, scope: CoroutineScope) : KnownHostsStore {
     }
 
     fun delete(entry: KnownHostEntry) = store.update { list -> list.filterNot { it == entry } }
+}
+
+class HostCaRepository(dir: File, scope: CoroutineScope) {
+    private val store = JsonStore(File(dir, "host_cas.json"), ListSerializer(HostCaEntry.serializer()), emptyList(), scope)
+    val entries: StateFlow<List<HostCaEntry>> = store.state
+
+    /** Replaces the entry with the same id, or adds it. */
+    fun upsert(entry: HostCaEntry) = store.update { list ->
+        if (list.any { it.id == entry.id }) list.map { if (it.id == entry.id) entry else it } else list + entry
+    }
+
+    fun delete(id: String) = store.update { list -> list.filterNot { it.id == id } }
+
+    fun authorities(): List<HostCertificateAuthority> = store.value.map { HostCertificateAuthority(it.publicKey, it.hostPatterns) }
 }
 
 class SnippetRepository(dir: File, scope: CoroutineScope) {

@@ -36,6 +36,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.CardMembership
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DriveFileRenameOutline
@@ -103,7 +104,7 @@ fun KeysTab(modifier: Modifier = Modifier) {
     var addMenu by remember { mutableStateOf(false) }
     var generating by remember { mutableStateOf(false) }
     var importing by remember { mutableStateOf(false) }
-    var selected by remember { mutableStateOf<SshKeyEntry?>(null) }
+    var selectedId by remember { mutableStateOf<String?>(null) }
 
     Box(modifier.fillMaxSize()) {
         LazyColumn(
@@ -123,7 +124,7 @@ fun KeysTab(modifier: Modifier = Modifier) {
             }
             items(keys, key = { it.id }) { key ->
                 Card(
-                    onClick = { selected = key },
+                    onClick = { selectedId = key.id },
                     shape = RoundedCornerShape(18.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
                     modifier = Modifier.fillMaxWidth(),
@@ -140,6 +141,10 @@ fun KeysTab(modifier: Modifier = Modifier) {
                                 Spacer(Modifier.width(8.dp))
                                 Surface(shape = RoundedCornerShape(6.dp), color = MaterialTheme.colorScheme.surfaceContainerHighest) {
                                     Text(key.keyType, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp))
+                                }
+                                key.certificate?.let {
+                                    Spacer(Modifier.width(6.dp))
+                                    CertificateBadge(it)
                                 }
                             }
                             Text(
@@ -196,7 +201,8 @@ fun KeysTab(modifier: Modifier = Modifier) {
 
     if (generating) GenerateKeyDialog(onDismiss = { generating = false })
     if (importing) ImportKeyDialog(onDismiss = { importing = false })
-    selected?.let { key -> KeyDetailsSheet(key, onDismiss = { selected = null }) }
+    // The current entry, so the sheet shows a certificate added from it.
+    keys.firstOrNull { it.id == selectedId }?.let { key -> KeyDetailsSheet(key, onDismiss = { selectedId = null }) }
 }
 
 @Composable
@@ -383,6 +389,8 @@ private fun KeyDetailsSheet(key: SshKeyEntry, onDismiss: () -> Unit) {
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf(false) }
+    var certifying by remember { mutableStateOf(false) }
+    var uncertifying by remember { mutableStateOf(false) }
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 8.dp)) {
             Column(Modifier.padding(horizontal = 24.dp)) {
@@ -407,6 +415,10 @@ private fun KeyDetailsSheet(key: SshKeyEntry, onDismiss: () -> Unit) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
                 )
+                key.certificate?.let {
+                    Spacer(Modifier.height(12.dp))
+                    CertificateSummary(it)
+                }
             }
             HorizontalDivider(Modifier.padding(vertical = 8.dp))
             DetailAction(Icons.Rounded.ContentCopy, stringResource(R.string.keys_copy_public)) {
@@ -418,11 +430,33 @@ private fun KeyDetailsSheet(key: SshKeyEntry, onDismiss: () -> Unit) {
                 context.startActivity(Intent.createChooser(send, key.name))
             }
             DetailAction(Icons.Rounded.FileDownload, stringResource(R.string.keys_export)) { exporting = true }
+            DetailAction(
+                Icons.Rounded.CardMembership,
+                stringResource(if (key.certificate == null) R.string.keys_certificate_add else R.string.keys_certificate_replace),
+            ) { certifying = true }
+            if (key.certificate != null) {
+                DetailAction(Icons.Rounded.Delete, stringResource(R.string.keys_certificate_remove), danger = true) { uncertifying = true }
+            }
             DetailAction(Icons.Rounded.DriveFileRenameOutline, stringResource(R.string.sftp_rename)) { renaming = true }
             DetailAction(Icons.Rounded.Delete, stringResource(R.string.action_delete), danger = true) { deleting = true }
         }
     }
     if (exporting) ExportKeyFlow(key, onFinished = { exporting = false })
+    if (certifying) CertificateDialog(key, onDismiss = { certifying = false })
+    if (uncertifying) {
+        AlertDialog(
+            onDismissRequest = { uncertifying = false },
+            title = { Text(stringResource(R.string.keys_certificate_remove_title)) },
+            text = { Text(stringResource(R.string.keys_certificate_remove_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    container.keys.setCertificate(key.id, null)
+                    uncertifying = false
+                }) { Text(stringResource(R.string.action_delete), color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { uncertifying = false }) { Text(stringResource(R.string.action_cancel)) } },
+        )
+    }
     if (renaming) {
         var value by remember { mutableStateOf(key.name) }
         AlertDialog(

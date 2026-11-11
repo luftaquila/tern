@@ -111,6 +111,10 @@ internal class Authenticator(
         for (key in credentials.filterIsInstance<SshCredential.PrivateKey>()) {
             if (METHOD_PUBLICKEY !in allowed) break
             val pair = loadPrivateKey(key, interaction) ?: continue
+            // The certificate first; a certificate of another key is left out.
+            val certificate = key.certificate?.let { Certified.forKey(it, pair) }
+            if (certificate != null && attempt(AuthPublickey(CertifiedKey(pair, certificate)), timeouts.normalMillis)) return
+            if (METHOD_PUBLICKEY !in allowed) break
             if (attempt(AuthPublickey(KeyPairWrapper(pair)), timeouts.normalMillis)) return
         }
 

@@ -73,11 +73,15 @@ sealed interface SshCredential {
     /** Password auth (also answers a lone keyboard-interactive password prompt). */
     data class Password(val password: String) : SshCredential
 
-    /** Public key auth. [privateKey] is key file text: OpenSSH, PEM (PKCS#1/#8/SEC1) or PuTTY. */
+    /**
+     * Public key auth. [privateKey] is key file text: OpenSSH, PEM (PKCS#1/#8/SEC1) or PuTTY.
+     * [certificate], an OpenSSH certificate of that key, is offered before the plain key.
+     */
     data class PrivateKey(
         val name: String,
         val privateKey: String,
         val passphrase: String? = null,
+        val certificate: String? = null,
     ) : SshCredential
 }
 
@@ -105,6 +109,9 @@ interface KnownHostsStore {
 
     /** Adds the entry, replacing an existing one with the same host, port and keyType. */
     fun save(entry: KnownHost)
+
+    /** CAs whose host certificates are trusted; a host certificate of another CA is judged by its plain key. */
+    fun certificateAuthorities(): List<HostCertificateAuthority> = emptyList()
 }
 
 enum class HostKeyStatus { UNKNOWN, CHANGED }

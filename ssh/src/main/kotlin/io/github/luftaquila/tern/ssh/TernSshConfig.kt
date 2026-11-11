@@ -16,6 +16,9 @@ import com.hierynomus.sshj.transport.mac.Macs
 import net.schmizz.keepalive.KeepAliveProvider
 import net.schmizz.sshj.DefaultConfig
 import net.schmizz.sshj.common.Factory
+import net.schmizz.sshj.common.KeyType
+import net.schmizz.sshj.signature.Signature
+import net.schmizz.sshj.signature.SignatureRSA
 import net.schmizz.sshj.transport.cipher.Cipher
 import net.schmizz.sshj.transport.kex.Curve25519SHA256
 import net.schmizz.sshj.transport.kex.DHGexSHA1
@@ -28,8 +31,8 @@ import java.util.LinkedList
  * the end of each list so old servers (routers, NAS boxes) still connect; broken ones
  * (arcfour, MD5/RIPEMD MACs, truncated MACs, exotic block ciphers) are dropped.
  *
- * Certificate and FIDO (sk-*) key algorithms are omitted: the app does not support host
- * CAs, so a certificate host key would just churn the known-hosts entry on every re-issue.
+ * Certificate key algorithms come last: they serve user certificates, and as host keys only for
+ * hosts a trusted CA covers ([preferCertificateHostKeys]). FIDO (sk-*) key algorithms are omitted.
  */
 internal class TernSshConfig : DefaultConfig() {
 
@@ -77,6 +80,34 @@ internal class TernSshConfig : DefaultConfig() {
             KeyAlgorithms.RSASHA256(),
             KeyAlgorithms.SSHRSA(),
             KeyAlgorithms.SSHDSA(),
+        ) + CERTIFICATE_KEY_ALGORITHMS
+    }
+
+    /** Puts the certificate host key algorithms first, for a host whose certificates a trusted CA signs. */
+    fun preferCertificateHostKeys() {
+        val (certificates, plain) = keyAlgorithms.partition { it in CERTIFICATE_KEY_ALGORITHMS }
+        keyAlgorithms = certificates + plain
+    }
+
+    /**
+     * RSA certificates with SHA-2 signatures (sshj only has the SHA-1 `ssh-rsa-cert-v01`, which
+     * OpenSSH 8.8 and later refuse); the signature inside is the plain `rsa-sha2-*` one.
+     */
+    private class RsaCertificateSignature(private val jcaName: String, private val signatureName: String) : Factory.Named<Signature> {
+        override fun getName(): String = signatureName
+
+        override fun create(): Signature = SignatureRSA(jcaName, KeyType.RSA_CERT, signatureName)
+    }
+
+    private companion object {
+        val CERTIFICATE_KEY_ALGORITHMS: List<Factory.Named<KeyAlgorithm>> = listOf(
+            KeyAlgorithms.EdDSA25519CertV01(),
+            KeyAlgorithms.ECDSASHANistp256CertV01(),
+            KeyAlgorithms.ECDSASHANistp384CertV01(),
+            KeyAlgorithms.ECDSASHANistp521CertV01(),
+            KeyAlgorithms.Factory("rsa-sha2-512-cert-v01@openssh.com", RsaCertificateSignature("SHA512withRSA", "rsa-sha2-512"), KeyType.RSA_CERT),
+            KeyAlgorithms.Factory("rsa-sha2-256-cert-v01@openssh.com", RsaCertificateSignature("SHA256withRSA", "rsa-sha2-256"), KeyType.RSA_CERT),
+            KeyAlgorithms.SSHRSACertV01(),
         )
     }
 

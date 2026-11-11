@@ -37,6 +37,7 @@ sealed interface Route {
     data class Terminal(val sessionId: Long) : Route
     data class Sftp(val hostId: String, val sessionId: Long? = null) : Route
     data object KnownHosts : Route
+    data object HostCas : Route
     data object Licenses : Route
     data object ExtraKeysEditor : Route
     data object Snippets : Route
@@ -125,6 +126,7 @@ fun TernNavHost(navigator: Navigator) {
                 is Route.Terminal -> TerminalScreen(route.sessionId)
                 is Route.Sftp -> SftpScreen(route.hostId, route.sessionId)
                 Route.KnownHosts -> KnownHostsScreen()
+                Route.HostCas -> io.github.luftaquila.tern.ui.settings.HostCasScreen()
                 Route.Licenses -> LicensesScreen()
                 Route.ExtraKeysEditor -> ExtraKeysEditorScreen()
                 Route.Snippets -> io.github.luftaquila.tern.ui.snippets.SnippetsScreen()

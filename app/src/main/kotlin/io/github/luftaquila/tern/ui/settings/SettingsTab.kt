@@ -174,6 +174,9 @@ fun SettingsTab(modifier: Modifier = Modifier) {
             NavRow(stringResource(R.string.settings_known_hosts), stringResource(R.string.settings_known_hosts_desc)) {
                 navigator.push(Route.KnownHosts)
             }
+            NavRow(stringResource(R.string.settings_host_cas), stringResource(R.string.settings_host_cas_desc)) {
+                navigator.push(Route.HostCas)
+            }
             SwitchRow(stringResource(R.string.settings_pq_kex), stringResource(R.string.settings_pq_kex_desc), settings.postQuantumKex) { v ->
                 update { it.copy(postQuantumKex = v) }
             }
