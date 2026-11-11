@@ -16,7 +16,11 @@ interface TerminalBackend {
     /** Non-blocking: bytes are queued for the remote host. */
     fun write(data: ByteArray)
 
+    /** Resizes [emulator] only; the remote host learns the size from [reportSize]. */
     fun resize(columns: Int, rows: Int, widthPx: Int, heightPx: Int)
+
+    /** Non-blocking: sends the size of the last [resize] to the remote host. */
+    fun reportSize()
 
     /** [listener] is invoked on a background thread after the screen changed. */
     fun addScreenListener(listener: () -> Unit)

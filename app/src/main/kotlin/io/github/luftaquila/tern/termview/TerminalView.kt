@@ -101,6 +101,7 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
     var backend: TerminalBackend? = null
         set(value) {
             if (field === value) return
+            flushSizeReport()
             field?.removeScreenListener(screenListener)
             field = value
             value?.addScreenListener(screenListener)
@@ -171,6 +172,13 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
     private var lastRows = -1
     private var lastPixelWidth = -1
     private var lastPixelHeight = -1
+
+    /** The backend's size changed and the remote has not been told yet. */
+    private var sizeReportPending = false
+    private val sizeReport = Runnable {
+        sizeReportPending = false
+        backend?.reportSize()
+    }
 
     var fontSizeSp: Float = 13f
         private set
@@ -291,6 +299,23 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         updateGrid()
+        // Re-armed on every pixel change, also between rows, so an animation (keyboard, extra keys)
+        // reports only its final size: tmux splits each resize between panes on its own, and
+        // different steps on show and hide shift a split.
+        if (sizeReportPending) scheduleSizeReport()
+    }
+
+    private fun scheduleSizeReport() {
+        sizeReportPending = true
+        removeCallbacks(sizeReport)
+        postDelayed(sizeReport, SIZE_REPORT_DELAY_MS)
+    }
+
+    /** Sends a pending size at once, before the backend changes or the view goes away. */
+    private fun flushSizeReport() {
+        if (!sizeReportPending) return
+        removeCallbacks(sizeReport)
+        sizeReport.run()
     }
 
     private fun updateGrid() {
@@ -311,6 +336,7 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
             lastPixelWidth = pixelWidth
             lastPixelHeight = pixelHeight
             be.resize(columns, rows, pixelWidth, pixelHeight)
+            scheduleSizeReport()
         }
     }
 
@@ -937,6 +963,7 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
     }
 
     override fun onDetachedFromWindow() {
+        flushSizeReport()
         removeCallbacks(blinkRunnable)
         actionMode?.finish()
         super.onDetachedFromWindow()
@@ -1687,6 +1714,9 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
         private fun padY(density: Float): Int = (2 * density).roundToInt()
 
         private const val BLINK_INTERVAL_MS = 600L
+
+        /** How long the view size stays unchanged before the remote is told the new size. */
+        private const val SIZE_REPORT_DELAY_MS = 120L
 
         /** Memory for decoded inline images, and the largest side they are decoded at. */
         private const val IMAGE_CACHE_BYTES = 32 shl 20

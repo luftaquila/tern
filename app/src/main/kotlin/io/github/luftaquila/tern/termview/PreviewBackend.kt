@@ -32,6 +32,8 @@ class PreviewBackend(scheme: ColorScheme, private val content: String) : Termina
         render()
     }
 
+    override fun reportSize() = Unit
+
     override fun addScreenListener(listener: () -> Unit) {
         listeners += listener
     }

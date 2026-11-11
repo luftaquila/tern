@@ -159,7 +159,14 @@ class TerminalSession(
             emulator.setPixelSize(widthPx, heightPx)
         }
         notifyScreen()
+    }
+
+    override fun reportSize() {
         val sh = shell ?: return
+        val columns = columns
+        val rows = rows
+        val widthPx = widthPx
+        val heightPx = heightPx
         try {
             writer.execute { runCatching { sh.resize(columns, rows, widthPx, heightPx) } }
         } catch (_: RejectedExecutionException) {
