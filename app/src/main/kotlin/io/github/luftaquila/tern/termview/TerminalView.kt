@@ -299,7 +299,7 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         updateGrid()
-        // Re-armed on every pixel change, also between rows, so an animation (keyboard, extra keys)
+        // Re-armed on every pixel change, also between rows, so an animation (the extra-keys bar)
         // reports only its final size: tmux splits each resize between panes on its own, and
         // different steps on show and hide shift a split.
         if (sizeReportPending) scheduleSizeReport()

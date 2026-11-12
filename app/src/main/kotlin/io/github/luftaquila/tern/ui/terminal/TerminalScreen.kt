@@ -10,15 +10,20 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imeAnimationTarget
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -61,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
@@ -168,6 +174,11 @@ private fun TerminalContent(session: TerminalSession, sessions: List<TerminalSes
         }
     }
 
+    // The insets the screen is padded by, and the same insets once the keyboard stops moving.
+    val insets = WindowInsets.safeDrawing
+    @OptIn(ExperimentalLayoutApi::class)
+    val settledInsets = WindowInsets.systemBars.union(WindowInsets.imeAnimationTarget).union(WindowInsets.displayCutout)
+
     LaunchedEffect(terminalView, session.id) {
         delay(250)
         terminalView?.showKeyboard()
@@ -224,7 +235,17 @@ private fun TerminalContent(session: TerminalSession, sessions: List<TerminalSes
                     v.backend = null
                     if (terminalView === v) terminalView = null
                 },
-                modifier = Modifier.fillMaxSize().clipToBounds(),
+                // Sized for where the keyboard ends up, so showing or hiding it changes the grid
+                // once instead of a row at a time; the box cuts off what the keyboard still covers.
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clipToBounds()
+                    .layout { measurable, constraints ->
+                        val change = insets.getBottom(this) - settledInsets.getBottom(this)
+                        val height = if (constraints.hasBoundedHeight) (constraints.maxHeight + change).coerceAtLeast(0) else constraints.maxHeight
+                        val placeable = measurable.measure(constraints.copy(minHeight = height, maxHeight = height))
+                        layout(constraints.maxWidth, constraints.maxHeight) { placeable.place(0, 0) }
+                    },
             )
             if (state == SessionState.Connecting) {
                 LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp).align(Alignment.TopCenter))

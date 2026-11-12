@@ -65,6 +65,7 @@
 - kitty replies only with `i` or `I` in the command; `q` silences them
 - XTVERSION never answered with another terminal's name
 - PTY pixel size: columns × cell width by rows × cell height, no padding; cell size queries unanswered while unknown
+- Terminal view sized for the keyboard's final position (`WindowInsets.imeAnimationTarget`), not the animated inset; cut off by its box while the keyboard moves
 - Emulator resized on every view size change; the remote told (`TerminalBackend.reportSize`) only once the view size stops changing (`TerminalView.SIZE_REPORT_DELAY_MS`), never per animation frame
 - `TerminalView.onDraw` clipped to its bounds; no `canvas.drawColor`
 - Box drawing, block elements and Powerline glyphs from `BoxDrawing.kt`, not the font
