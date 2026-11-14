@@ -13,7 +13,7 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.github.luftaquila.tern"
+        applicationId = "io.luftaquila.tern"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

@@ -27,7 +27,7 @@ luftaquila. Third-party material keeps its own license (see below).
 2. Marking modified versions (section 7(c)). Modified versions must not
    misrepresent their origin and must be marked in reasonable ways as
    different from the original version: they must use a name other than
-   "Tern", an application ID other than io.github.luftaquila.tern and a
+   "Tern", an application ID other than io.luftaquila.tern and a
    launcher icon other than the Tern icon, and must not state or suggest that
    they are Tern or that they come from its author.
 

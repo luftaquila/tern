@@ -36,6 +36,7 @@
 - `SessionService`: special-use foreground service while any session is open
 - Secret fields of the JSON stores encrypted with `SecretBox`
 - Persisted identifiers fixed: Keystore alias `tern.secret.v1` (a new alias only with `SecretBox.migrateEarlierKeys`), color scheme ids
+- Application ID `io.luftaquila.tern` fixed; Kotlin packages and `namespace` stay `io.github.luftaquila.tern`
 - No mosh support
 
 ## IME invariants
