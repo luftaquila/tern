@@ -377,7 +377,7 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
             drawSelection(canvas, em)
             reconcileEcho(em)
             val preedit = imeProcessor.preedit
-            val echo = if (pendingEcho.isEmpty()) "" else pendingEcho.joinToString("")
+            val echo = pendingEcho.toString()
             if (preedit.isNotEmpty() || echo.isNotEmpty()) {
                 drawInputOverlay(canvas, em, echo, preedit, cols, defaultBg)
             } else {
@@ -868,13 +868,13 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
     // =====================================================================================
 
     /**
-     * Text sent to the remote whose echo has not shown up yet, one entry per send. Committed
-     * IME text is kept on screen here so a word does not vanish (and the caret jump back to
-     * its start) for a network round trip between commit and echo.
+     * Text sent to the remote whose echo has not shown up yet. Committed IME text is kept on
+     * screen here so a word does not vanish (and the caret jump back to its start) for a
+     * network round trip between commit and echo.
      */
-    private val pendingEcho = ArrayDeque<String>()
+    private val pendingEcho = StringBuilder()
 
-    /** [linearCursor] when the oldest [pendingEcho] entry was sent. */
+    /** [linearCursor] where the first character of [pendingEcho] goes. */
     private var echoAnchor = 0L
     private var echoDeadline = 0L
     private val echoExpiry = Runnable { invalidate() }
@@ -886,7 +886,7 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
     private fun predictEcho(text: String) {
         val be = backend ?: return
         if (pendingEcho.isEmpty()) echoAnchor = synchronized(be.lock) { linearCursor(be.emulator) }
-        pendingEcho.addLast(text)
+        pendingEcho.append(text)
         echoDeadline = SystemClock.uptimeMillis() + ECHO_TIMEOUT_MS
         removeCallbacks(echoExpiry)
         postDelayed(echoExpiry, ECHO_TIMEOUT_MS)
@@ -901,9 +901,10 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
 
     /**
      * Drops the predicted text the remote has echoed by now, judged by how far the cursor
-     * advanced. Anything else — the cursor moved backwards, to another place, or by an amount
-     * that is not a whole number of entries — or no echo within [ECHO_TIMEOUT_MS] ends the
-     * prediction (e.g. a password prompt, or a TUI that does not echo).
+     * advanced. The echo of one send may arrive in pieces (zsh under tmux echoes "한 " as "한"
+     * and then " "), so any advance that ends between two characters drops just those. Any
+     * other movement (backwards, past the prediction, into a wide character) or no echo within
+     * [ECHO_TIMEOUT_MS] ends the prediction (e.g. a password prompt, or a TUI that does not echo).
      */
     private fun reconcileEcho(em: TerminalEmulator) {
         if (pendingEcho.isEmpty()) return
@@ -914,24 +915,21 @@ class TerminalView(context: Context, val modifiers: StickyModifiers) : View(cont
         val now = linearCursor(em)
         var advance = now - echoAnchor
         if (advance == 0L) return
-        while (advance > 0 && pendingEcho.isNotEmpty()) {
-            val cells = textCells(pendingEcho.first())
+        var echoed = 0
+        while (echoed < pendingEcho.length) {
+            val cp = Character.codePointAt(pendingEcho, echoed)
+            // Zero-width code points go with the character before them.
+            val cells = WcWidth.width(cp).coerceAtLeast(0)
             if (cells > advance) break
             advance -= cells
-            pendingEcho.removeFirst()
+            echoed += Character.charCount(cp)
         }
-        if (advance == 0L) echoAnchor = now else pendingEcho.clear()
-    }
-
-    private fun textCells(text: String): Int {
-        var cells = 0
-        var i = 0
-        while (i < text.length) {
-            val cp = text.codePointAt(i)
-            i += Character.charCount(cp)
-            cells += WcWidth.width(cp).coerceAtLeast(0)
+        if (advance == 0L) {
+            pendingEcho.delete(0, echoed)
+            echoAnchor = now
+        } else {
+            pendingEcho.clear()
         }
-        return cells
     }
 
     // =====================================================================================
